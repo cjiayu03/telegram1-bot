@@ -42,6 +42,97 @@ function now() {
 }
 
 // =========================
+// INLINE KEYBOARD HELPERS
+// =========================
+
+// pendingReply tracks users who tapped "💬 Comment" button in the group
+// { telegramUserId: { incidentId, promptMsgId } }
+const pendingReply = {};
+
+function incidentKeyboard(id) {
+  return {
+    inline_keyboard: [
+      [
+        { text: '💬 Comment', callback_data: `comment:${id}` },
+        { text: '🔧 In Progress', callback_data: `status:${id}:IN_PROGRESS` },
+        { text: '✅ Resolve', callback_data: `status:${id}:RESOLVED` }
+      ]
+    ]
+  };
+}
+
+// Handle inline button presses
+bot.on('callback_query', async (query) => {
+  const userId = query.from.id;
+  const user   = query.from.username || query.from.first_name;
+  const data   = query.data || '';
+  const chatId = query.message.chat.id;
+  const msgId  = query.message.message_id;
+
+  // ── Comment button ───────────────────────────────────────
+  if (data.startsWith('comment:')) {
+    const incidentId = data.split(':')[1];
+    const report = reports.find(r => String(r.id) === String(incidentId));
+    if (!report) {
+      return bot.answerCallbackQuery(query.id, { text: '❌ Incident not found.' });
+    }
+
+    pendingReply[userId] = { incidentId, originMsgId: msgId };
+
+    const prompt = await bot.sendMessage(
+      chatId,
+      `💬 @${user}, type your comment for incident \`${incidentId}\` and I'll add it.\n_(Reply to this message or just send your next message here)_`,
+      { parse_mode: 'Markdown', reply_to_message_id: msgId }
+    );
+
+    pendingReply[userId].promptMsgId = prompt.message_id;
+    bot.answerCallbackQuery(query.id, { text: 'Go ahead — type your comment!' });
+    return;
+  }
+
+  // ── Status buttons ───────────────────────────────────────
+  if (data.startsWith('status:')) {
+    const [, incidentId, newStatus] = data.split(':');
+    const report = reports.find(r => String(r.id) === String(incidentId));
+    if (!report) {
+      return bot.answerCallbackQuery(query.id, { text: '❌ Incident not found.' });
+    }
+
+    const oldStatus = report.status;
+    if (oldStatus === newStatus) {
+      return bot.answerCallbackQuery(query.id, { text: `Already ${newStatus}.` });
+    }
+
+    report.status = newStatus;
+
+    // Edit the original group message to reflect new status
+    try {
+      const originalText = query.message.text || '';
+      const updatedText  = originalText.replace(/Status:.+/g, '') +
+        `\nStatus: ${statusEmoji(newStatus)} *${newStatus}*\nUpdated by @${user}`;
+      await bot.editMessageText(updatedText, {
+        chat_id: chatId,
+        message_id: msgId,
+        parse_mode: 'Markdown',
+        reply_markup: incidentKeyboard(incidentId)
+      });
+    } catch (_) { /* message may be too old to edit — that's fine */ }
+
+    bot.answerCallbackQuery(query.id, { text: `${statusEmoji(newStatus)} Marked ${newStatus}` });
+
+    bot.sendMessage(
+      GROUP_CHAT_ID,
+      `${statusEmoji(newStatus)} *Status Update*\n\nIncident \`${incidentId}\` → *${newStatus}* by @${user}`,
+      { parse_mode: 'Markdown' }
+    );
+
+    return;
+  }
+
+  bot.answerCallbackQuery(query.id);
+});
+
+// =========================
 // TELEGRAM → INCIDENTS
 // =========================
 
@@ -49,8 +140,39 @@ bot.on('message', (msg) => {
   const text = msg.text || '';
   if (!text || msg.from.is_bot) return;
 
-  const chatId = msg.chat.id;
-  const user = msg.from.username || msg.from.first_name;
+  const chatId  = msg.chat.id;
+  const userId  = msg.from.id;
+  const user    = msg.from.username || msg.from.first_name;
+
+  // ── Intercept pending inline-button comment replies ───────
+  if (pendingReply[userId] && !text.startsWith('/')) {
+    const { incidentId, promptMsgId, originMsgId } = pendingReply[userId];
+    delete pendingReply[userId];
+
+    const report = reports.find(r => String(r.id) === String(incidentId));
+    if (!report) {
+      return bot.sendMessage(chatId, `❌ Incident \`${incidentId}\` no longer exists.`, { parse_mode: 'Markdown' });
+    }
+
+    const comment = { id: Date.now(), user, message: text, time: now() };
+    report.comments.push(comment);
+
+    // Delete the "type your comment" prompt to keep the chat tidy
+    bot.deleteMessage(chatId, promptMsgId).catch(() => {});
+
+    // Send the comment as a thread reply to the original incident message
+    bot.sendMessage(
+      GROUP_CHAT_ID,
+      `💬 *Comment on Incident \`${incidentId}\`*\n\n@${user}: ${text}`,
+      {
+        parse_mode: 'Markdown',
+        reply_to_message_id: originMsgId,
+        reply_markup: incidentKeyboard(incidentId)
+      }
+    );
+
+    return;
+  }
 
   // ── /report [severity] <message> ──────────────────────────
   if (text.startsWith('/report')) {
@@ -85,11 +207,11 @@ bot.on('message', (msg) => {
       { parse_mode: 'Markdown' }
     );
 
-    // FIX: notify the group too
+    // Notify the group with inline action buttons
     bot.sendMessage(
       GROUP_CHAT_ID,
-      `🚨 *New Incident*\n\nID: \`${report.id}\`\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nFrom: @${user}\n\n${reportText}`,
-      { parse_mode: 'Markdown' }
+      `🚨 *New Incident*\n\nID: \`${report.id}\`\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nFrom: @${user}\nStatus: 🆕 OPEN\n\n${reportText}`,
+      { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) }
     );
 
     return;
@@ -155,7 +277,7 @@ bot.on('message', (msg) => {
     bot.sendMessage(
       GROUP_CHAT_ID,
       `💬 *Comment on Incident \`${id}\`*\n\n@${user}: ${message}`,
-      { parse_mode: 'Markdown' }
+      { parse_mode: 'Markdown', reply_markup: incidentKeyboard(id) }
     );
 
     return;
@@ -227,8 +349,8 @@ app.post('/api/report', (req, res) => {
 
   bot.sendMessage(
     GROUP_CHAT_ID,
-    `🚨 *Dashboard Incident*\n\nID: \`${report.id}\`\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nFrom: ${user}\n\n${message}`,
-    { parse_mode: 'Markdown' }
+    `🚨 *Dashboard Incident*\n\nID: \`${report.id}\`\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nFrom: ${user}\nStatus: 🆕 OPEN\n\n${message}`,
+    { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) }
   );
 
   res.json({ success: true, report });
