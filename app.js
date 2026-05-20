@@ -205,34 +205,28 @@ async function loadReports() {
 
   const container = document.getElementById('reports');
 
-  container.innerHTML = reports.map(r => `
-    <div class="card">
+container.innerHTML = reports.map(r =>
+  '<div class="card">' +
 
-      <div><b>@${r.user}</b> - ${r.time}</div>
-      <div>${r.report}</div>
+    '<div class="top">' +
+      '<div class="user">@' + r.user + '</div>' +
+      '<div class="time">' + r.time + '</div>' +
+    '</div>' +
 
-      <div>
-        <span class="badge ${r.severity}">
-          ${r.severity.toUpperCase()}
-        </span>
-      </div>
+    '<div class="report">' + r.report + '</div>' +
 
-      <div class="comments">
-        ${(r.comments || []).map(c => `
-          <div>
-            <b>@${c.user}</b>: ${c.message}
-            <small>${c.time}</small>
-          </div>
-        `).join('')}
-      </div>
+    '<div>' +
+      '<span class="badge ' + r.severity + '">' +
+        r.severity.toUpperCase() +
+      '</span>' +
 
-      <div style="margin-top:10px;">
-        <input id="c-${r.id}" placeholder="Add comment..." />
-        <button onclick="addComment(${r.id})">Comment</button>
-      </div>
+      '<span class="badge status">' +
+        r.status +
+      '</span>' +
+    '</div>' +
 
-    </div>
-  `).join('');
+  '</div>'
+).join('');
 }
 
 async function addComment(id) {
