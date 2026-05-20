@@ -282,28 +282,29 @@ async function loadReports() {
     return;
   }
 
-  container.innerHTML = reports.map(r => `
-    <div class="card">
+ container.innerHTML = reports.map(r =>
+  '<div class="card">' +
 
-      <div class="top">
-        <div class="user">@${r.user}</div>
-        <div class="time">${r.time}</div>
-      </div>
+    '<div class="top">' +
+      '<div class="user">@' + r.user + '</div>' +
+      '<div class="time">' + r.time + '</div>' +
+    '</div>' +
 
-      <div class="report">${r.report}</div>
+    '<div class="report">' + r.report + '</div>' +
 
-      <div>
-        <span class="badge ${r.severity}">
-          ${r.severity.toUpperCase()}
-        </span>
+    '<div>' +
+      '<span class="badge ' + r.severity + '">' +
+        r.severity.toUpperCase() +
+      '</span>' +
 
-        <span class="badge status">
-          ${r.status}
-        </span>
-      </div>
+      '<span class="badge status">' +
+        r.status +
+      '</span>' +
+    '</div>' +
 
-    </div>
-  `).join('');
+  '</div>'
+).join('');
+
 }
 
 async function sendReport() {
