@@ -9,35 +9,21 @@ app.use(express.json());
 // =========================
 
 const token = process.env.TELEGRAM_TOKEN;
-const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID; // IMPORTANT
+const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
 
 const bot = new TelegramBot(token, { polling: true });
 
 // =========================
-// STORE REPORTS
+// DATA STORE
 // =========================
 
 let reports = [];
 
 // =========================
-// HELPERS
+// TELEGRAM → INCIDENTS
 // =========================
 
-function escapeHtml(str = '') {
-  return str.replace(/[&<>"']/g, m => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;'
-  }[m]));
-}
-
-// =========================
-// TELEGRAM → SYSTEM
-// =========================
-
-bot.on('message', async (msg) => {
+bot.on('message', (msg) => {
   const text = msg.text || '';
   if (!text) return;
   if (msg.from.is_bot) return;
@@ -45,24 +31,21 @@ bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const user = msg.from.username || msg.from.first_name;
 
-  console.log(user, text);
-
-  // ONLY /report
   if (!text.startsWith('/report')) return;
 
   const args = text.replace('/report', '').trim().split(' ');
 
-  const validSeverities = ['low', 'medium', 'critical'];
+  const valid = ['low', 'medium', 'critical'];
 
   let severity = 'low';
-  let startIndex = 0;
+  let start = 0;
 
-  if (validSeverities.includes(args[0]?.toLowerCase())) {
+  if (valid.includes(args[0]?.toLowerCase())) {
     severity = args[0].toLowerCase();
-    startIndex = 1;
+    start = 1;
   }
 
-  const reportText = args.slice(startIndex).join(' ') || '[empty]';
+  const reportText = args.slice(start).join(' ') || '[empty]';
 
   const report = {
     id: Date.now(),
@@ -71,34 +54,23 @@ bot.on('message', async (msg) => {
     report: reportText,
     status: 'OPEN',
     source: 'telegram',
-    time: new Date().toISOString().replace('T', ' ').slice(0, 19)
+    time: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    comments: []
   };
 
   reports.unshift(report);
-  reports = reports.slice(0, 100);
 
-  console.log('REPORT:', report);
-
-  bot.sendMessage(
-    chatId,
-    `✅ Incident Created
-
-ID: ${report.id}
-Severity: ${severity.toUpperCase()}
-Status: OPEN`
-  );
+  bot.sendMessage(chatId, `✅ Incident Created\n\nID: ${report.id}\nSeverity: ${severity.toUpperCase()}`);
 });
 
 // =========================
-// DASHBOARD → TELEGRAM + STORE
+// DASHBOARD → INCIDENTS
 // =========================
 
 app.post('/api/report', (req, res) => {
   const { severity, message, user = 'dashboard' } = req.body;
 
-  if (!message) {
-    return res.status(400).json({ error: 'Message required' });
-  }
+  if (!message) return res.status(400).json({ error: 'Message required' });
 
   const report = {
     id: Date.now(),
@@ -107,28 +79,55 @@ app.post('/api/report', (req, res) => {
     report: message,
     status: 'OPEN',
     source: 'dashboard',
-    time: new Date().toISOString().replace('T', ' ').slice(0, 19)
+    time: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    comments: []
   };
 
   reports.unshift(report);
-  reports = reports.slice(0, 100);
 
-  // send to Telegram group
   bot.sendMessage(
     GROUP_CHAT_ID,
-    `🚨 Dashboard Report
-
-Severity: ${report.severity.toUpperCase()}
-From: ${user}
-
-${message}`
+    `🚨 Dashboard Incident\n\nSeverity: ${report.severity.toUpperCase()}\nFrom: ${user}\n\n${message}`
   );
 
   res.json({ success: true, report });
 });
 
 // =========================
-// API → DASHBOARD DATA
+// ADD COMMENT TO INCIDENT
+// =========================
+
+app.post('/api/reports/:id/comment', (req, res) => {
+  const { id } = req.params;
+  const { message, user = 'dashboard' } = req.body;
+
+  if (!message) return res.status(400).json({ error: 'Message required' });
+
+  const report = reports.find(r => String(r.id) === String(id));
+
+  if (!report) {
+    return res.status(404).json({ error: 'Incident not found' });
+  }
+
+  const comment = {
+    id: Date.now(),
+    user,
+    message,
+    time: new Date().toISOString().replace('T', ' ').slice(0, 19)
+  };
+
+  report.comments.push(comment);
+
+  bot.sendMessage(
+    GROUP_CHAT_ID,
+    `💬 Comment on Incident ${id}\n\n@${user}: ${message}`
+  );
+
+  res.json({ success: true, comment });
+});
+
+// =========================
+// GET INCIDENTS
 // =========================
 
 app.get('/api/reports', (req, res) => {
@@ -148,78 +147,41 @@ app.get('/dashboard', (req, res) => {
 
 <style>
 body { margin:0; background:#0f172a; font-family:Arial; color:white; }
-.header { background:#111827; padding:20px; border-bottom:1px solid #1e293b; }
-.title { font-size:28px; font-weight:bold; }
-.subtitle { color:#94a3b8; margin-top:5px; }
-.container { max-width:1100px; margin:auto; padding:20px; }
+.header { background:#111827; padding:20px; }
+.title { font-size:26px; font-weight:bold; }
 
-.stats {
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:15px;
-  margin-bottom:25px;
-}
-
-.stat {
-  background:#111827;
-  padding:20px;
-  border-radius:14px;
-}
-
-.stat-title { color:#94a3b8; font-size:14px; }
-.stat-value { font-size:32px; margin-top:10px; }
+.container { padding:20px; max-width:1000px; margin:auto; }
 
 .card {
   background:#111827;
-  border:1px solid #1e293b;
-  border-radius:14px;
-  padding:18px;
-  margin-bottom:16px;
+  padding:16px;
+  border-radius:12px;
+  margin-bottom:12px;
 }
 
-.top { display:flex; justify-content:space-between; margin-bottom:10px; }
+.badge { padding:4px 10px; border-radius:999px; font-size:12px; }
+.low { background:#14532d; }
+.medium { background:#78350f; }
+.critical { background:#7f1d1d; }
 
-.user { color:#4ade80; font-weight:bold; }
-.time { color:#94a3b8; font-size:12px; }
-
-.report { line-height:1.6; margin-bottom:10px; }
-
-.badge {
-  display:inline-block;
-  padding:5px 10px;
-  border-radius:999px;
-  font-size:12px;
-  font-weight:bold;
+.comments {
+  margin-top:10px;
+  padding-left:10px;
+  border-left:2px solid #334155;
 }
 
-.low { background:#14532d; color:#86efac; }
-.medium { background:#78350f; color:#fcd34d; }
-.critical { background:#7f1d1d; color:#fca5a5; }
-
-.status { background:#1e3a8a; color:#bfdbfe; margin-left:8px; }
-
-.input-box {
-  margin-bottom:20px;
-  display:flex;
-  gap:10px;
-}
-
-input, select {
-  padding:10px;
-  border-radius:8px;
-  border:none;
+input, select, button {
+  padding:8px;
+  margin-top:5px;
 }
 
 button {
-  padding:10px 15px;
-  border-radius:8px;
-  border:none;
+  cursor:pointer;
   background:#2563eb;
   color:white;
-  cursor:pointer;
+  border:none;
+  border-radius:6px;
 }
-
-.empty { text-align:center; padding:50px; color:#94a3b8; }
 </style>
 </head>
 
@@ -227,37 +189,9 @@ button {
 
 <div class="header">
   <div class="title">🚨 Incident Dashboard</div>
-  <div class="subtitle">Telegram + Dashboard 2-way system</div>
 </div>
 
 <div class="container">
-
-  <div class="input-box">
-    <input id="msg" placeholder="Type incident..." style="flex:1;" />
-    <select id="severity">
-      <option value="low">Low</option>
-      <option value="medium">Medium</option>
-      <option value="critical">Critical</option>
-    </select>
-    <button onclick="sendReport()">Send</button>
-  </div>
-
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-title">Total</div>
-      <div class="stat-value" id="total">0</div>
-    </div>
-
-    <div class="stat">
-      <div class="stat-title">Critical</div>
-      <div class="stat-value" id="critical">0</div>
-    </div>
-
-    <div class="stat">
-      <div class="stat-title">Open</div>
-      <div class="stat-value" id="open">0</div>
-    </div>
-  </div>
 
   <div id="reports"></div>
 
@@ -269,61 +203,51 @@ async function loadReports() {
   const res = await fetch('/api/reports');
   const reports = await res.json();
 
-  document.getElementById('total').innerText = reports.length;
-  document.getElementById('critical').innerText =
-    reports.filter(r => r.severity === 'critical').length;
-  document.getElementById('open').innerText =
-    reports.filter(r => r.status === 'OPEN').length;
-
   const container = document.getElementById('reports');
 
-  if (reports.length === 0) {
-    container.innerHTML = '<div class="empty">No incidents yet</div>';
-    return;
-  }
+  container.innerHTML = reports.map(r => `
+    <div class="card">
 
- container.innerHTML = reports.map(r =>
-  '<div class="card">' +
+      <div><b>@${r.user}</b> - ${r.time}</div>
+      <div>${r.report}</div>
 
-    '<div class="top">' +
-      '<div class="user">@' + r.user + '</div>' +
-      '<div class="time">' + r.time + '</div>' +
-    '</div>' +
+      <div>
+        <span class="badge ${r.severity}">
+          ${r.severity.toUpperCase()}
+        </span>
+      </div>
 
-    '<div class="report">' + r.report + '</div>' +
+      <div class="comments">
+        ${(r.comments || []).map(c => `
+          <div>
+            <b>@${c.user}</b>: ${c.message}
+            <small>${c.time}</small>
+          </div>
+        `).join('')}
+      </div>
 
-    '<div>' +
-      '<span class="badge ' + r.severity + '">' +
-        r.severity.toUpperCase() +
-      '</span>' +
+      <div style="margin-top:10px;">
+        <input id="c-${r.id}" placeholder="Add comment..." />
+        <button onclick="addComment(${r.id})">Comment</button>
+      </div>
 
-      '<span class="badge status">' +
-        r.status +
-      '</span>' +
-    '</div>' +
-
-  '</div>'
-).join('');
-
+    </div>
+  `).join('');
 }
 
-async function sendReport() {
-  const message = document.getElementById('msg').value;
-  const severity = document.getElementById('severity').value;
+async function addComment(id) {
+  const input = document.getElementById('c-' + id);
 
-  if (!message) return;
-
-  await fetch('/api/report', {
+  await fetch('/api/reports/' + id + '/comment', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      message,
-      severity,
+      message: input.value,
       user: 'dashboard'
     })
   });
 
-  document.getElementById('msg').value = '';
+  input.value = '';
   loadReports();
 }
 
@@ -342,11 +266,11 @@ setInterval(loadReports, 2000);
 // =========================
 
 app.get('/', (req, res) => {
-  res.send('Telegram Incident System Running');
+  res.send('Incident System Running');
 });
 
 // =========================
-// START
+// START SERVER
 // =========================
 
 app.listen(process.env.PORT || 3000, () => {
