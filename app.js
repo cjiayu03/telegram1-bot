@@ -135,7 +135,7 @@ bot.on('message', (msg) => {
     bot.deleteMessage(chatId, promptMsgId).catch(() => {});
 
     bot.sendMessage(GROUP_CHAT_ID,
-      `💬 *Comment on Incident \`${incidentId}\`*\n\n@${user}: ${text}`,
+      `💬 *Comment on "${report.title || incidentId}"*\n\n@${user}: ${text}`,
       { parse_mode: 'Markdown', reply_to_message_id: originMsgId, reply_markup: incidentKeyboard(incidentId) });
     return;
   }
@@ -203,7 +203,7 @@ bot.on('message', (msg) => {
     if (!report) return bot.sendMessage(chatId, `❌ Incident \`${id}\` not found.`, { parse_mode: 'Markdown' });
     report.comments.push({ id: Date.now(), user, message, time: now() });
     bot.sendMessage(chatId, `💬 Comment added to incident \`${id}\`.`, { parse_mode: 'Markdown' });
-    bot.sendMessage(GROUP_CHAT_ID, `💬 *Comment on Incident \`${id}\`*\n\n@${user}: ${message}`, { parse_mode: 'Markdown', reply_markup: incidentKeyboard(id) });
+    bot.sendMessage(GROUP_CHAT_ID, `💬 *Comment on "${report.title || id}"*\n\n@${user}: ${message}`, { parse_mode: 'Markdown', reply_markup: incidentKeyboard(id) });
     return;
   }
 
@@ -319,7 +319,7 @@ app.post('/api/reports/:id/comment', (req, res) => {
   report.updatedAt = now();
 
   bot.sendMessage(GROUP_CHAT_ID,
-    `💬 *Comment on Incident \`${id}\`*\n\n@${user}: ${message}`,
+    `💬 *Comment on "${report.title || id}"*\n\n@${user}: ${message}`,
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(id) });
 
   res.json({ success: true, comment });
