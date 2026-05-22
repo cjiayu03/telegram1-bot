@@ -766,7 +766,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  z-index: 9999;
   padding: 20px;
 }
 .modal {
@@ -1165,7 +1165,13 @@ async function addComment(id) {
 }
 
 // ── MODAL ────────────────────────────────────────────────
-function openModal()  { document.getElementById('modal').style.display = 'flex'; document.getElementById('f-title').focus(); }
+function openModal() {
+  const m = document.getElementById('modal');
+  // Ensure modal is a direct child of body so no stacking context traps it
+  if (m.parentElement !== document.body) document.body.appendChild(m);
+  m.style.display = 'flex';
+  setTimeout(() => { const t = document.getElementById('f-title'); if(t) t.focus(); }, 50);
+}
 function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
 async function submitReport() {
@@ -1197,6 +1203,15 @@ async function submitReport() {
 }
 
 // ── BOOT ─────────────────────────────────────────────────
+// Move modal to body immediately to escape any stacking context
+(function() {
+  const m = document.getElementById('modal');
+  if (m) {
+    document.body.appendChild(m);
+    // Ensure overlay click-to-close works after reparent
+    m.addEventListener('click', function(e) { if (e.target === m) closeModal(); });
+  }
+})();
 loadReports();
 setInterval(loadReports, 3000);
 </script>
