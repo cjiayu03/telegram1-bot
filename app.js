@@ -140,6 +140,23 @@ bot.on('message', (msg) => {
     return;
   }
 
+  // ── Plain message in group chat → create incident ──────
+  // If someone types a plain message (not a command) in the GROUP chat,
+  // treat it as a low-severity incident report automatically
+  if (!text.startsWith('/') && String(chatId) === String(GROUP_CHAT_ID)) {
+    const report = {
+      id: Date.now(), user, severity: 'low', report: text,
+      title: text.slice(0, 60), description: '', assignee: '',
+      tags: [], priority: 'normal', status: 'OPEN',
+      source: 'telegram', time: now(), updatedAt: now(), comments: []
+    };
+    reports.unshift(report);
+    bot.sendMessage(chatId,
+      `✅ *Incident Created from group message*\n\nID: \`${report.id}\`\nSeverity: 🟡 LOW\nFrom: @${user}\n\nUse /status ${report.id} IN_PROGRESS or /status ${report.id} RESOLVED to update.`,
+      { parse_mode: 'Markdown', reply_to_message_id: msg.message_id, reply_markup: incidentKeyboard(report.id) });
+    return;
+  }
+
   if (text.startsWith('/report')) {
     const args = text.replace('/report', '').trim().split(' ');
     let severity = 'low', start = 0;
@@ -329,563 +346,207 @@ app.get('/dashboard', (req, res) => {
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:       #080c14;
-  --surface:  #0d1320;
-  --surface2: #111927;
-  --border:   #1c2a3a;
-  --border2:  #243042;
-  --text:     #e2eaf4;
-  --muted:    #4d6278;
-  --accent:   #3b82f6;
-  --accent2:  #1d4ed8;
+  --bg:#080c14; --surface:#0d1320; --surface2:#111927;
+  --border:#1c2a3a; --border2:#243042;
+  --text:#e2eaf4; --muted:#4d6278;
+  --accent:#3b82f6; --accent2:#1d4ed8;
+  --sev-low:#0f3d26; --sev-low-t:#4ade80;
+  --sev-med:#422006; --sev-med-t:#fb923c;
+  --sev-crit:#450a0a; --sev-crit-t:#f87171;
+  --st-open:#0f2744; --st-open-t:#60a5fa;
+  --st-prog:#2d1f00; --st-prog-t:#fbbf24;
+  --st-res:#0f3d26; --st-res-t:#4ade80;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min-height:100vh;}
 
-  --sev-low:      #0f3d26; --sev-low-text:      #4ade80;
-  --sev-medium:   #422006; --sev-medium-text:   #fb923c;
-  --sev-critical: #450a0a; --sev-critical-text: #f87171;
+/* HEADER */
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+.logo{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;letter-spacing:.04em;display:flex;align-items:center;gap:10px;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4);}50%{box-shadow:0 0 0 6px rgba(239,68,68,0);}}
+.logo-dot{animation:pulse 2s infinite;}
 
-  --st-open:    #0f2744; --st-open-text:    #60a5fa;
-  --st-prog:    #2d1f00; --st-prog-text:    #fbbf24;
-  --st-res:     #0f3d26; --st-res-text:     #4ade80;
+/* STATS */
+.stats-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;display:flex;overflow-x:auto;}
+.stat-item{padding:14px 24px;border-right:1px solid var(--border);min-width:110px;cursor:pointer;}
+.stat-item:hover,.stat-item.active{background:var(--surface2);}
+.stat-num{font-family:'Space Mono',monospace;font-size:22px;font-weight:700;line-height:1;margin-bottom:3px;}
+.stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+.stat-critical .stat-num{color:#f87171;}
+.stat-open .stat-num{color:#60a5fa;}
+.stat-prog .stat-num{color:#fbbf24;}
+.stat-res .stat-num{color:#4ade80;}
 
-  --pri-low:    #1a2035; --pri-low-text:    #94a3b8;
-  --pri-normal: #0f2744; --pri-normal-text: #60a5fa;
-  --pri-high:   #2d1f00; --pri-high-text:   #fbbf24;
-  --pri-urgent: #450a0a; --pri-urgent-text: #f87171;
-}
+/* LAYOUT */
+.layout{display:flex;height:calc(100vh - 103px);}
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* LEFT PANEL */
+.left-panel{width:320px;min-width:260px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.panel-toolbar{padding:12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.search-box{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;}
+.search-box:focus{border-color:var(--accent);}
+.filter-row{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0;}
+.chip{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border2);color:var(--muted);background:transparent;font-family:'DM Sans',sans-serif;}
+.chip:hover{border-color:var(--accent);color:var(--accent);}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.incident-list{flex:1;overflow-y:auto;padding:6px;}
+.incident-list::-webkit-scrollbar{width:4px;}
+.incident-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 
-body {
-  background: var(--bg);
-  font-family: 'DM Sans', sans-serif;
-  color: var(--text);
-  min-height: 100vh;
-}
+/* INCIDENT CARD */
+.inc-card{padding:11px 12px 11px 18px;border-radius:8px;border:1px solid transparent;margin-bottom:3px;cursor:pointer;position:relative;}
+.inc-card:hover{background:var(--surface2);border-color:var(--border2);}
+.inc-card.active{background:var(--surface2);border-color:var(--accent);}
+.sev-bar{position:absolute;left:6px;top:8px;bottom:8px;width:3px;border-radius:2px;}
+.sev-bar.low{background:var(--sev-low-t);}
+.sev-bar.medium{background:var(--sev-med-t);}
+.sev-bar.critical{background:var(--sev-crit-t);}
+.inc-title{font-size:13px;font-weight:500;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inc-meta{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
 
-/* ── HEADER ───────────────────────────────────── */
-.header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 28px;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.logo {
-  font-family: 'Space Mono', monospace;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.logo-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0%,100% { opacity:1; box-shadow: 0 0 0 0 rgba(239,68,68,.4); }
-  50%      { opacity:.7; box-shadow: 0 0 0 6px rgba(239,68,68,0); }
-}
-.header-right { display: flex; align-items: center; gap: 16px; }
-.live-badge {
-  font-size: 11px; font-family: 'Space Mono', monospace;
-  color: var(--muted); letter-spacing:.06em;
-}
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Space Mono',monospace;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
+.sev-low{background:var(--sev-low);color:var(--sev-low-t);}
+.sev-medium{background:var(--sev-med);color:var(--sev-med-t);}
+.sev-critical{background:var(--sev-crit);color:var(--sev-crit-t);}
+.st-OPEN{background:var(--st-open);color:var(--st-open-t);}
+.st-IN_PROGRESS{background:var(--st-prog);color:var(--st-prog-t);}
+.st-RESOLVED{background:var(--st-res);color:var(--st-res-t);}
+.pri-low{background:#1a2035;color:#94a3b8;}
+.pri-normal{background:#0f2744;color:#60a5fa;}
+.pri-high{background:#2d1f00;color:#fbbf24;}
+.pri-urgent{background:#450a0a;color:#f87171;}
+.src-badge{background:var(--surface2);border:1px solid var(--border2);color:var(--muted);}
 
-/* ── STATS BAR ────────────────────────────────── */
-.stats-bar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 28px;
-  display: flex;
-  gap: 0;
-  overflow-x: auto;
-}
-.stat-item {
-  padding: 14px 24px;
-  border-right: 1px solid var(--border);
-  min-width: 120px;
-  cursor: pointer;
-  transition: background .15s;
-}
-.stat-item:hover, .stat-item.active { background: var(--surface2); }
-.stat-item:first-child { padding-left: 0; }
-.stat-num {
-  font-family: 'Space Mono', monospace;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-  margin-bottom: 3px;
-}
-.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
-.stat-item.critical .stat-num { color: #f87171; }
-.stat-item.open     .stat-num { color: #60a5fa; }
-.stat-item.prog     .stat-num { color: #fbbf24; }
-.stat-item.res      .stat-num { color: #4ade80; }
+/* DETAIL PANEL */
+.detail-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.detail-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
+.detail-title{font-family:'Space Mono',monospace;font-size:17px;font-weight:700;line-height:1.3;flex:1;}
+.detail-id{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);flex-shrink:0;margin-top:4px;}
+.detail-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;}
+.meta-item label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px;}
+.meta-item span{font-size:13px;font-weight:500;}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;}
 
-/* ── LAYOUT ───────────────────────────────────── */
-.layout {
-  display: flex;
-  height: calc(100vh - 103px);
-}
+.detail-body{flex:1;overflow-y:auto;padding:18px 24px;display:flex;flex-direction:column;gap:18px;}
+.detail-body::-webkit-scrollbar{width:4px;}
+.detail-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.section-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px;font-family:'Space Mono',monospace;}
+.desc-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:14px;line-height:1.6;white-space:pre-wrap;}
+.tags-list{display:flex;gap:6px;flex-wrap:wrap;}
+.tag{padding:3px 10px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;}
 
-/* ── LEFT PANEL ───────────────────────────────── */
-.left-panel {
-  width: 340px;
-  min-width: 280px;
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.panel-toolbar {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-shrink: 0;
-}
-.search-box {
-  flex: 1;
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  padding: 7px 12px;
-  color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  outline: none;
-}
-.search-box::placeholder { color: var(--muted); }
-.search-box:focus { border-color: var(--accent); }
+/* COMMENTS */
+.comment-thread{display:flex;flex-direction:column;gap:8px;}
+.comment-item{display:flex;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+.comment-avatar{width:28px;height:28px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Mono',monospace;}
+.comment-body{flex:1;}
+.comment-meta{display:flex;gap:8px;align-items:center;margin-bottom:3px;}
+.comment-user{font-size:12px;font-weight:600;color:#60a5fa;}
+.comment-time{font-size:11px;color:var(--muted);}
+.comment-text{font-size:13px;line-height:1.5;}
+.comment-input-row{display:flex;gap:8px;padding:12px 24px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0;}
+.comment-input{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:none;height:40px;transition:border-color .15s,height .15s;}
+.comment-input:focus{border-color:var(--accent);height:72px;}
 
-.filter-row {
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-}
-.filter-chip {
-  padding: 3px 10px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border2);
-  color: var(--muted);
-  background: transparent;
-  transition: all .15s;
-  font-family: 'DM Sans', sans-serif;
-  letter-spacing: .04em;
-}
-.filter-chip:hover  { border-color: var(--accent); color: var(--accent); }
-.filter-chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* EMPTY */
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:10px;}
+.empty-icon{font-size:44px;opacity:.3;}
 
-.incident-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-.incident-list::-webkit-scrollbar { width: 4px; }
-.incident-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border2);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.btn-danger{background:#450a0a;color:#f87171;border:1px solid #7f1d1d;}
+.btn-danger:hover{background:#7f1d1d;}
+.btn-success{background:var(--sev-low);color:var(--sev-low-t);border:1px solid #166534;}
+.btn-success:hover{background:#166534;}
+.btn-warn{background:var(--sev-med);color:var(--sev-med-t);border:1px solid #92400e;}
+.btn-warn:hover{background:#92400e;}
 
-.inc-card {
-  padding: 12px 14px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  margin-bottom: 4px;
-  cursor: pointer;
-  transition: all .15s;
-  position: relative;
-}
-.inc-card:hover   { background: var(--surface2); border-color: var(--border2); }
-.inc-card.active  { background: var(--surface2); border-color: var(--accent); }
-.inc-card-title {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.inc-card-meta {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* ── BADGES ───────────────────────────────────── */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  font-family: 'Space Mono', monospace;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.badge.sev-low      { background: var(--sev-low);      color: var(--sev-low-text); }
-.badge.sev-medium   { background: var(--sev-medium);   color: var(--sev-medium-text); }
-.badge.sev-critical { background: var(--sev-critical); color: var(--sev-critical-text); }
-.badge.st-OPEN        { background: var(--st-open); color: var(--st-open-text); }
-.badge.st-IN_PROGRESS { background: var(--st-prog); color: var(--st-prog-text); }
-.badge.st-RESOLVED    { background: var(--st-res);  color: var(--st-res-text); }
-.badge.pri-low    { background: var(--pri-low);    color: var(--pri-low-text); }
-.badge.pri-normal { background: var(--pri-normal); color: var(--pri-normal-text); }
-.badge.pri-high   { background: var(--pri-high);   color: var(--pri-high-text); }
-.badge.pri-urgent { background: var(--pri-urgent); color: var(--pri-urgent-text); }
-
-.sev-bar {
-  position: absolute;
-  left: 0; top: 8px; bottom: 8px;
-  width: 3px;
-  border-radius: 2px;
-}
-.sev-bar.low      { background: var(--sev-low-text); }
-.sev-bar.medium   { background: var(--sev-medium-text); }
-.sev-bar.critical { background: var(--sev-critical-text); }
-
-/* ── RIGHT DETAIL PANEL ───────────────────────── */
-.detail-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.detail-header {
-  padding: 20px 28px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.detail-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-.detail-title {
-  font-family: 'Space Mono', monospace;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.3;
-  flex: 1;
-}
-.detail-id {
-  font-family: 'Space Mono', monospace;
-  font-size: 11px;
-  color: var(--muted);
-  flex-shrink: 0;
-  margin-top: 4px;
-}
-.detail-badges {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-.detail-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
-}
-.meta-item label {
-  display: block;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--muted);
-  margin-bottom: 3px;
-}
-.meta-item span {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.detail-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.detail-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.detail-body::-webkit-scrollbar { width: 4px; }
-.detail-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-.section-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-  color: var(--muted);
-  margin-bottom: 8px;
-  font-family: 'Space Mono', monospace;
-}
-.description-box {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 16px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text);
-  white-space: pre-wrap;
-}
-
-.tags-list {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.tag {
-  padding: 3px 10px;
-  border-radius: 4px;
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  font-size: 11px;
-  color: var(--muted);
-  font-family: 'Space Mono', monospace;
-}
-
-/* ── COMMENTS ─────────────────────────────────── */
-.comment-thread { display: flex; flex-direction: column; gap: 10px; }
-.comment-item {
-  display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.comment-avatar {
-  width: 30px; height: 30px;
-  border-radius: 50%;
-  background: var(--accent2);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-  font-family: 'Space Mono', monospace;
-}
-.comment-body { flex: 1; }
-.comment-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
-.comment-user { font-size: 12px; font-weight: 600; color: #60a5fa; }
-.comment-time { font-size: 11px; color: var(--muted); }
-.comment-text { font-size: 13px; line-height: 1.5; }
-
-.comment-input-row {
-  display: flex;
-  gap: 8px;
-  padding: 16px 28px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  flex-shrink: 0;
-}
-.comment-input {
-  flex: 1;
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  padding: 10px 14px;
-  color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  outline: none;
-  resize: none;
-  height: 42px;
-  transition: border-color .15s;
-}
-.comment-input:focus { border-color: var(--accent); height: 80px; }
-
-/* ── EMPTY STATE ──────────────────────────────── */
-.empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted);
-  gap: 12px;
-}
-.empty-icon { font-size: 48px; opacity: .4; }
-.empty-text { font-size: 14px; }
-
-/* ── BUTTONS ──────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  font-family: 'DM Sans', sans-serif;
-  transition: all .15s;
-  white-space: nowrap;
-}
-.btn-primary { background: var(--accent); color: #fff; }
-.btn-primary:hover { background: var(--accent2); }
-.btn-ghost { background: var(--surface2); color: var(--text); border: 1px solid var(--border2); }
-.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-.btn-danger { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; }
-.btn-danger:hover { background: #7f1d1d; }
-.btn-success { background: var(--sev-low); color: var(--sev-low-text); border: 1px solid #166534; }
-.btn-success:hover { background: #166534; }
-.btn-warn { background: var(--sev-medium); color: var(--sev-medium-text); border: 1px solid #92400e; }
-.btn-warn:hover { background: #92400e; }
-
-/* ── MODAL ────────────────────────────────────── */
-.modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 20px;
-}
-.modal {
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 14px;
-  width: 100%;
-  max-width: 560px;
-  padding: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-.modal-title {
-  font-family: 'Space Mono', monospace;
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-.field-label {
-  display: block;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--muted);
-  margin-bottom: 5px;
-}
-.field-input, .field-select, .field-textarea {
-  width: 100%;
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  padding: 9px 12px;
-  color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  outline: none;
-  transition: border-color .15s;
-}
-.field-input:focus, .field-select:focus, .field-textarea:focus { border-color: var(--accent); }
-.field-textarea { resize: vertical; min-height: 80px; }
-.field-select option { background: var(--surface2); }
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+/* MODAL */
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);align-items:center;justify-content:center;z-index:99999;padding:20px;}
+#modal-overlay.open{display:flex;}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:540px;padding:26px;display:flex;flex-direction:column;gap:14px;max-height:90vh;overflow-y:auto;}
+.modal-title{font-family:'Space Mono',monospace;font-size:16px;font-weight:700;}
+.field-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
+.field-input,.field-select,.field-textarea{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s;}
+.field-input:focus,.field-select:focus,.field-textarea:focus{border-color:var(--accent);}
+.field-textarea{resize:vertical;min-height:80px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:4px;}
 </style>
 </head>
 <body>
 
-<!-- HEADER -->
 <div class="header">
   <div class="logo">
     <div class="logo-dot"></div>
     INCIDENT COMMAND
   </div>
-  <div class="header-right">
-    <span class="live-badge" id="last-updated">LIVE</span>
-    <button class="btn btn-primary" onclick="openModal()">+ New Incident</button>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <span style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;" id="last-updated">CONNECTING...</span>
+    <button class="btn btn-primary" id="new-btn">+ New Incident</button>
   </div>
 </div>
 
-<!-- STATS BAR -->
 <div class="stats-bar">
-  <div class="stat-item critical" onclick="setFilter('critical')" id="stat-critical">
+  <div class="stat-item stat-critical" id="stat-critical" style="padding-left:0">
     <div class="stat-num" id="cnt-critical">0</div>
     <div class="stat-label">Critical</div>
   </div>
-  <div class="stat-item open" onclick="setFilter('OPEN')" id="stat-open">
+  <div class="stat-item stat-open" id="stat-open">
     <div class="stat-num" id="cnt-open">0</div>
     <div class="stat-label">Open</div>
   </div>
-  <div class="stat-item prog" onclick="setFilter('IN_PROGRESS')" id="stat-prog">
+  <div class="stat-item stat-prog" id="stat-prog">
     <div class="stat-num" id="cnt-prog">0</div>
     <div class="stat-label">In Progress</div>
   </div>
-  <div class="stat-item res" onclick="setFilter('RESOLVED')" id="stat-res">
+  <div class="stat-item stat-res" id="stat-res">
     <div class="stat-num" id="cnt-res">0</div>
     <div class="stat-label">Resolved</div>
   </div>
-  <div class="stat-item" onclick="setFilter(null)">
+  <div class="stat-item" id="stat-all">
     <div class="stat-num" id="cnt-all">0</div>
     <div class="stat-label">Total</div>
   </div>
 </div>
 
-<!-- MAIN LAYOUT -->
 <div class="layout">
-
-  <!-- LEFT: Incident List -->
   <div class="left-panel">
     <div class="panel-toolbar">
-      <input class="search-box" id="search-box" placeholder="Search incidents…" oninput="renderList()">
+      <input class="search-box" id="search-box" placeholder="Search incidents...">
     </div>
-    <div class="filter-row" id="filter-row">
-      <button class="filter-chip active" data-filter="null" onclick="setFilter(null)">All</button>
-      <button class="filter-chip" data-filter="OPEN" onclick="setFilter('OPEN')">Open</button>
-      <button class="filter-chip" data-filter="IN_PROGRESS" onclick="setFilter('IN_PROGRESS')">In Progress</button>
-      <button class="filter-chip" data-filter="RESOLVED" onclick="setFilter('RESOLVED')">Resolved</button>
-      <button class="filter-chip" data-filter="critical" onclick="setFilter('critical')">🔴 Critical</button>
-      <button class="filter-chip" data-filter="medium" onclick="setFilter('medium')">🟠 Medium</button>
-      <button class="filter-chip" data-filter="low" onclick="setFilter('low')">🟡 Low</button>
+    <div class="filter-row">
+      <button class="chip active" data-filter="">All</button>
+      <button class="chip" data-filter="OPEN">Open</button>
+      <button class="chip" data-filter="IN_PROGRESS">In Progress</button>
+      <button class="chip" data-filter="RESOLVED">Resolved</button>
+      <button class="chip" data-filter="critical">Critical</button>
+      <button class="chip" data-filter="medium">Medium</button>
+      <button class="chip" data-filter="low">Low</button>
     </div>
     <div class="incident-list" id="incident-list"></div>
   </div>
 
-  <!-- RIGHT: Detail -->
   <div class="detail-panel" id="detail-panel">
     <div class="empty-state">
       <div class="empty-icon">🎯</div>
-      <div class="empty-text">Select an incident to view details</div>
+      <div style="font-size:14px;">Select an incident to view details</div>
+      <div style="font-size:12px;margin-top:4px;">or create one with + New Incident</div>
     </div>
   </div>
-
 </div>
 
-<!-- CREATE MODAL -->
-<div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
-  <div class="modal">
+<!-- MODAL — lives at top level, no parent stacking context issues -->
+<div id="modal-overlay">
+  <div class="modal-box" id="modal-box">
     <div class="modal-title">Create New Incident</div>
 
     <div>
@@ -897,9 +558,9 @@ body {
       <div>
         <label class="field-label">Severity</label>
         <select class="field-select" id="f-severity">
-          <option value="low">🟡 Low</option>
-          <option value="medium" selected>🟠 Medium</option>
-          <option value="critical">🔴 Critical</option>
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="critical">Critical</option>
         </select>
       </div>
       <div>
@@ -915,12 +576,12 @@ body {
 
     <div>
       <label class="field-label">Description</label>
-      <textarea class="field-textarea" id="f-description" placeholder="What happened? Include steps to reproduce, impact, etc."></textarea>
+      <textarea class="field-textarea" id="f-description" placeholder="What happened? Impact, steps to reproduce..."></textarea>
     </div>
 
     <div>
-      <label class="field-label">Short Report (required)</label>
-      <input class="field-input" id="f-message" placeholder="One-line summary sent to Telegram">
+      <label class="field-label">Short Report * (sent to Telegram)</label>
+      <input class="field-input" id="f-message" placeholder="One-line summary">
     </div>
 
     <div class="field-row">
@@ -930,292 +591,260 @@ body {
       </div>
       <div>
         <label class="field-label">Tags (comma-separated)</label>
-        <input class="field-input" id="f-tags" placeholder="infra, database, auth">
+        <input class="field-input" id="f-tags" placeholder="infra, db, auth">
       </div>
     </div>
 
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="submitReport()">Create Incident</button>
+      <button class="btn btn-ghost" id="cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="submit-btn">Create Incident</button>
     </div>
   </div>
 </div>
 
 <script>
-// ── STATE ────────────────────────────────────────────────
-let allReports   = [];
-let activeFilter = null;
-let selectedId   = null;
+var allReports = [];
+var activeFilter = '';
+var selectedId = null;
 
-// ── UTILS ────────────────────────────────────────────────
 function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 function initials(name) {
-  return (name||'?').replace('@','').slice(0,2).toUpperCase();
+  return String(name || '?').replace('@','').slice(0,2).toUpperCase();
 }
 
-// ── LOAD ─────────────────────────────────────────────────
-async function loadReports() {
-  try {
-    const res = await fetch('/api/reports');
-    allReports = await res.json();
-  } catch(e) { return; }
+// ── MODAL ──────────────────────────────────────────────────
+var overlay = document.getElementById('modal-overlay');
+document.getElementById('new-btn').onclick = function() {
+  overlay.classList.add('open');
+  document.getElementById('f-title').focus();
+};
+document.getElementById('cancel-btn').onclick = function() {
+  overlay.classList.remove('open');
+};
+overlay.onclick = function(e) {
+  if (e.target === overlay) overlay.classList.remove('open');
+};
+document.getElementById('submit-btn').onclick = submitReport;
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') overlay.classList.remove('open');
+});
 
-  // Update stats
-  document.getElementById('cnt-all').textContent      = allReports.length;
-  document.getElementById('cnt-critical').textContent  = allReports.filter(r=>r.severity==='critical').length;
-  document.getElementById('cnt-open').textContent      = allReports.filter(r=>r.status==='OPEN').length;
-  document.getElementById('cnt-prog').textContent      = allReports.filter(r=>r.status==='IN_PROGRESS').length;
-  document.getElementById('cnt-res').textContent       = allReports.filter(r=>r.status==='RESOLVED').length;
-  document.getElementById('last-updated').textContent  = 'Updated ' + new Date().toLocaleTimeString();
-
-  renderList();
-
-  // Refresh detail pane if something is selected
-  if (selectedId) {
-    const r = allReports.find(r => String(r.id) === String(selectedId));
-    if (r) renderDetail(r);
-  }
+// ── LOAD ───────────────────────────────────────────────────
+function loadReports() {
+  fetch('/api/reports')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      allReports = data;
+      document.getElementById('cnt-all').textContent      = data.length;
+      document.getElementById('cnt-critical').textContent = data.filter(function(r){return r.severity==='critical';}).length;
+      document.getElementById('cnt-open').textContent     = data.filter(function(r){return r.status==='OPEN';}).length;
+      document.getElementById('cnt-prog').textContent     = data.filter(function(r){return r.status==='IN_PROGRESS';}).length;
+      document.getElementById('cnt-res').textContent      = data.filter(function(r){return r.status==='RESOLVED';}).length;
+      document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+      renderList();
+      if (selectedId) {
+        var r = allReports.find(function(r){return String(r.id)===String(selectedId);});
+        if (r) renderDetail(r);
+      }
+    })
+    .catch(function(e){ console.error('Load error', e); });
 }
 
-// ── FILTER & LIST ────────────────────────────────────────
-function setFilter(f) {
-  activeFilter = f === 'null' ? null : f;
-  document.querySelectorAll('.filter-chip').forEach(el => {
-    el.classList.toggle('active', String(el.dataset.filter) === String(activeFilter ?? 'null'));
-  });
-  renderList();
-}
+// ── FILTER ─────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(function(chip) {
+  chip.onclick = function() {
+    activeFilter = chip.dataset.filter;
+    document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('active'); });
+    chip.classList.add('active');
+    renderList();
+  };
+});
 
+['stat-critical','stat-open','stat-prog','stat-res','stat-all'].forEach(function(id) {
+  var map = {'stat-critical':'critical','stat-open':'OPEN','stat-prog':'IN_PROGRESS','stat-res':'RESOLVED','stat-all':''};
+  document.getElementById(id).onclick = function() {
+    activeFilter = map[id];
+    document.querySelectorAll('.chip').forEach(function(c){
+      c.classList.toggle('active', c.dataset.filter === activeFilter);
+    });
+    renderList();
+  };
+});
+
+document.getElementById('search-box').oninput = renderList;
+
+// ── LIST ───────────────────────────────────────────────────
 function renderList() {
-  const search = (document.getElementById('search-box').value || '').toLowerCase();
-  let list = allReports;
+  var search = (document.getElementById('search-box').value || '').toLowerCase();
+  var list = allReports.filter(function(r) {
+    if (activeFilter === 'critical' || activeFilter === 'medium' || activeFilter === 'low') {
+      if (r.severity !== activeFilter) return false;
+    } else if (activeFilter) {
+      if (r.status !== activeFilter) return false;
+    }
+    if (search) {
+      var hay = [(r.title||''),(r.report||''),(r.user||''),(r.assignee||''),(r.tags||[]).join(' ')].join(' ').toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
 
-  if (activeFilter) {
-    list = list.filter(r =>
-      r.status === activeFilter || r.severity === activeFilter
-    );
-  }
-  if (search) {
-    list = list.filter(r =>
-      (r.title||'').toLowerCase().includes(search) ||
-      (r.report||'').toLowerCase().includes(search) ||
-      (r.user||'').toLowerCase().includes(search) ||
-      (r.assignee||'').toLowerCase().includes(search) ||
-      (r.tags||[]).some(t => t.toLowerCase().includes(search))
-    );
-  }
-
-  const el = document.getElementById('incident-list');
+  var el = document.getElementById('incident-list');
   if (!list.length) {
-    el.innerHTML = '<div style="padding:20px;color:#4d6278;font-size:13px;text-align:center">No incidents match</div>';
+    el.innerHTML = '<div style="padding:20px;color:#4d6278;font-size:13px;text-align:center;">No incidents match</div>';
     return;
   }
 
-  el.innerHTML = list.map(r => {
-    const isActive = String(r.id) === String(selectedId);
-    return \`
-      <div class="inc-card\${isActive?' active':''}" onclick="selectIncident('\${r.id}')">
-        <div class="sev-bar \${r.severity}"></div>
-        <div style="padding-left:8px">
-          <div class="inc-card-title">\${esc(r.title||r.report)}</div>
-          <div class="inc-card-meta">
-            <span class="badge sev-\${r.severity}">\${r.severity}</span>
-            <span class="badge st-\${r.status}">\${r.status.replace('_',' ')}</span>
-            \${r.assignee ? '<span style="font-size:11px;color:#4d6278">→ '+esc(r.assignee)+'</span>' : ''}
-            <span style="font-size:11px;color:#4d6278;margin-left:auto">\${r.time.slice(5,16)}</span>
-          </div>
-        </div>
-      </div>
-    \`;
+  el.innerHTML = list.map(function(r) {
+    var active = String(r.id) === String(selectedId) ? ' active' : '';
+    var assignee = r.assignee ? '<span style="font-size:11px;color:#4d6278;">to ' + esc(r.assignee) + '</span>' : '';
+    var time = (r.time || '').slice(5,16);
+    return '<div class="inc-card' + active + '" onclick="selectIncident(\\'' + r.id + '\\')">' +
+      '<div class="sev-bar ' + esc(r.severity) + '"></div>' +
+      '<div class="inc-title">' + esc(r.title || r.report) + '</div>' +
+      '<div class="inc-meta">' +
+        '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+        '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
+        assignee +
+        '<span style="font-size:11px;color:#4d6278;margin-left:auto;">' + time + '</span>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
-// ── DETAIL ───────────────────────────────────────────────
+// ── DETAIL ─────────────────────────────────────────────────
 function selectIncident(id) {
   selectedId = id;
-  const r = allReports.find(r => String(r.id) === String(id));
-  if (!r) return;
   renderList();
-  renderDetail(r);
+  var r = allReports.find(function(r){return String(r.id)===String(id);});
+  if (r) renderDetail(r);
 }
 
 function renderDetail(r) {
-  const panel = document.getElementById('detail-panel');
+  var panel = document.getElementById('detail-panel');
 
-  const tagsHtml = (r.tags||[]).length
-    ? r.tags.map(t => \`<span class="tag">#\${esc(t)}</span>\`).join('')
-    : '<span style="color:#4d6278;font-size:12px">No tags</span>';
+  var tags = (r.tags || []).length
+    ? r.tags.map(function(t){return '<span class="tag">#'+esc(t)+'</span>';}).join('')
+    : '<span style="color:#4d6278;font-size:12px;">No tags</span>';
 
-  const commentsHtml = (r.comments||[]).length
-    ? r.comments.map(c => \`
-        <div class="comment-item">
-          <div class="comment-avatar">\${initials(c.user)}</div>
-          <div class="comment-body">
-            <div class="comment-meta">
-              <span class="comment-user">@\${esc(c.user)}</span>
-              <span class="comment-time">\${c.time}</span>
-              \${c.source==='telegram'?'<span style="font-size:10px;color:#4d6278">via Telegram</span>':''}
-            </div>
-            <div class="comment-text">\${esc(c.message)}</div>
-          </div>
-        </div>
-      \`).join('')
-    : '<div style="color:#4d6278;font-size:13px;padding:12px 0">No comments yet. Be the first to update.</div>';
+  var comments = (r.comments || []).length
+    ? r.comments.map(function(c) {
+        return '<div class="comment-item">' +
+          '<div class="comment-avatar">' + initials(c.user) + '</div>' +
+          '<div class="comment-body">' +
+            '<div class="comment-meta">' +
+              '<span class="comment-user">@' + esc(c.user) + '</span>' +
+              '<span class="comment-time">' + esc(c.time) + '</span>' +
+            '</div>' +
+            '<div class="comment-text">' + esc(c.message) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('')
+    : '<div style="color:#4d6278;font-size:13px;padding:8px 0;">No comments yet.</div>';
 
-  const statusActions = \`
-    \${r.status!=='IN_PROGRESS'?'<button class="btn btn-warn" onclick="setStatus(\''+r.id+'\',\'IN_PROGRESS\')">🔧 In Progress</button>':''}
-    \${r.status!=='RESOLVED'   ?'<button class="btn btn-success" onclick="setStatus(\''+r.id+'\',\'RESOLVED\')">✅ Resolve</button>':''}
-    \${r.status!=='OPEN'       ?'<button class="btn btn-danger"  onclick="setStatus(\''+r.id+'\',\'OPEN\')">🆕 Reopen</button>':''}
-  \`;
+  var statusBtns = '';
+  if (r.status !== 'IN_PROGRESS') statusBtns += '<button class="btn btn-warn" onclick="setStatus(\\'' + r.id + '\\',\\'IN_PROGRESS\\')">🔧 In Progress</button>';
+  if (r.status !== 'RESOLVED')    statusBtns += '<button class="btn btn-success" onclick="setStatus(\\'' + r.id + '\\',\\'RESOLVED\\')">✅ Resolve</button>';
+  if (r.status !== 'OPEN')        statusBtns += '<button class="btn btn-danger" onclick="setStatus(\\'' + r.id + '\\',\\'OPEN\\')">🆕 Reopen</button>';
 
-  panel.innerHTML = \`
-    <div class="detail-header">
-      <div class="detail-title-row">
-        <div class="detail-title">\${esc(r.title||r.report)}</div>
-        <div class="detail-id">#\${r.id}</div>
-      </div>
-      <div class="detail-badges">
-        <span class="badge sev-\${r.severity}">\${r.severity}</span>
-        <span class="badge st-\${r.status}">\${r.status.replace('_',' ')}</span>
-        <span class="badge pri-\${r.priority||'normal'}">\${r.priority||'normal'} priority</span>
-        <span class="badge" style="background:#1c2a3a;color:#4d6278">\${r.source}</span>
-      </div>
-      <div class="detail-meta-grid">
-        <div class="meta-item">
-          <label>Reporter</label>
-          <span>@\${esc(r.user)}</span>
-        </div>
-        <div class="meta-item">
-          <label>Assignee</label>
-          <span>\${r.assignee?'@'+esc(r.assignee):'<span style=\\"color:#4d6278\\">Unassigned</span>'}</span>
-        </div>
-        <div class="meta-item">
-          <label>Created</label>
-          <span>\${r.time}</span>
-        </div>
-        <div class="meta-item">
-          <label>Last Updated</label>
-          <span>\${r.updatedAt||r.time}</span>
-        </div>
-      </div>
-    </div>
+  var descSection = r.description
+    ? '<div><div class="section-label">Description</div><div class="desc-box">' + esc(r.description) + '</div></div>'
+    : '';
 
-    <div class="detail-body">
+  var assignee = r.assignee ? '@' + esc(r.assignee) : '<span style="color:#4d6278;">Unassigned</span>';
 
-      <div>
-        <div class="section-label">Status Actions</div>
-        <div class="detail-actions">\${statusActions}</div>
-      </div>
+  panel.innerHTML =
+    '<div class="detail-header">' +
+      '<div class="detail-title-row">' +
+        '<div class="detail-title">' + esc(r.title || r.report) + '</div>' +
+        '<div class="detail-id">#' + r.id + '</div>' +
+      '</div>' +
+      '<div class="detail-badges">' +
+        '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+        '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
+        '<span class="badge pri-' + esc(r.priority||'normal') + '">' + esc(r.priority||'normal') + ' priority</span>' +
+        '<span class="badge src-badge">' + esc(r.source) + '</span>' +
+      '</div>' +
+      '<div class="meta-grid">' +
+        '<div class="meta-item"><label>Reporter</label><span>@' + esc(r.user) + '</span></div>' +
+        '<div class="meta-item"><label>Assignee</label><span>' + assignee + '</span></div>' +
+        '<div class="meta-item"><label>Created</label><span>' + esc(r.time) + '</span></div>' +
+        '<div class="meta-item"><label>Updated</label><span>' + esc(r.updatedAt || r.time) + '</span></div>' +
+      '</div>' +
+      '<div class="action-row">' + statusBtns + '</div>' +
+    '</div>' +
+    '<div class="detail-body">' +
+      '<div><div class="section-label">Short Report</div><div class="desc-box">' + esc(r.report) + '</div></div>' +
+      descSection +
+      '<div><div class="section-label">Tags</div><div class="tags-list">' + tags + '</div></div>' +
+      '<div><div class="section-label">Comments (' + (r.comments||[]).length + ')</div>' +
+        '<div class="comment-thread">' + comments + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="comment-input-row">' +
+      '<textarea class="comment-input" id="comment-input" placeholder="Add a comment... (Enter to send)"></textarea>' +
+      '<button class="btn btn-primary" id="send-comment-btn">Send</button>' +
+    '</div>';
 
-      <div>
-        <div class="section-label">Short Report</div>
-        <div class="description-box">\${esc(r.report)}</div>
-      </div>
-
-      \${r.description ? \`
-        <div>
-          <div class="section-label">Description</div>
-          <div class="description-box">\${esc(r.description)}</div>
-        </div>
-      \` : ''}
-
-      <div>
-        <div class="section-label">Tags</div>
-        <div class="tags-list">\${tagsHtml}</div>
-      </div>
-
-      <div>
-        <div class="section-label">Comments (\${(r.comments||[]).length})</div>
-        <div class="comment-thread">\${commentsHtml}</div>
-      </div>
-
-    </div>
-
-    <div class="comment-input-row">
-      <textarea class="comment-input" id="comment-input" placeholder="Add a comment… (Enter to send, Shift+Enter for new line)"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();addComment('\${r.id}')}"></textarea>
-      <button class="btn btn-primary" onclick="addComment('\${r.id}')">Send</button>
-    </div>
-  \`;
+  document.getElementById('send-comment-btn').onclick = function() { addComment(r.id); };
+  document.getElementById('comment-input').onkeydown = function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(r.id); }
+  };
 }
 
-// ── ACTIONS ──────────────────────────────────────────────
-async function setStatus(id, status) {
-  await fetch('/api/reports/'+id+'/status', {
+// ── ACTIONS ────────────────────────────────────────────────
+function setStatus(id, status) {
+  fetch('/api/reports/' + id + '/status', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ status, user: 'dashboard' })
-  });
-  await loadReports();
+    body: JSON.stringify({status: status, user: 'dashboard'})
+  }).then(loadReports);
 }
 
-async function addComment(id) {
-  const input = document.getElementById('comment-input');
-  const message = input.value.trim();
+function addComment(id) {
+  var input = document.getElementById('comment-input');
+  var message = input.value.trim();
   if (!message) return;
-  await fetch('/api/reports/'+id+'/comment', {
+  fetch('/api/reports/' + id + '/comment', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ message, user: 'dashboard' })
+    body: JSON.stringify({message: message, user: 'dashboard'})
+  }).then(function() {
+    input.value = '';
+    loadReports();
   });
-  input.value = '';
-  await loadReports();
 }
 
-// ── MODAL ────────────────────────────────────────────────
-function openModal() {
-  const m = document.getElementById('modal');
-  // Ensure modal is a direct child of body so no stacking context traps it
-  if (m.parentElement !== document.body) document.body.appendChild(m);
-  m.style.display = 'flex';
-  setTimeout(() => { const t = document.getElementById('f-title'); if(t) t.focus(); }, 50);
-}
-function closeModal() { document.getElementById('modal').style.display = 'none'; }
+function submitReport() {
+  var title       = document.getElementById('f-title').value.trim();
+  var severity    = document.getElementById('f-severity').value;
+  var priority    = document.getElementById('f-priority').value;
+  var description = document.getElementById('f-description').value.trim();
+  var message     = document.getElementById('f-message').value.trim() || title;
+  var assignee    = document.getElementById('f-assignee').value.trim();
+  var tagsRaw     = document.getElementById('f-tags').value;
+  var tags        = tagsRaw.split(',').map(function(t){return t.trim();}).filter(Boolean);
 
-async function submitReport() {
-  const title       = document.getElementById('f-title').value.trim();
-  const severity    = document.getElementById('f-severity').value;
-  const priority    = document.getElementById('f-priority').value;
-  const description = document.getElementById('f-description').value.trim();
-  const message     = document.getElementById('f-message').value.trim() || title;
-  const assignee    = document.getElementById('f-assignee').value.trim();
-  const tagsRaw     = document.getElementById('f-tags').value;
-  const tags        = tagsRaw.split(',').map(t=>t.trim()).filter(Boolean);
+  if (!title) { alert('Title is required.'); return; }
 
-  if (!title) return alert('Title is required.');
-  if (!message) return alert('Short report is required.');
-
-  await fetch('/api/report', {
+  fetch('/api/report', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ title, severity, priority, description, message, assignee, tags, user: 'dashboard' })
+    body: JSON.stringify({title:title, severity:severity, priority:priority, description:description, message:message||title, assignee:assignee, tags:tags, user:'dashboard'})
+  }).then(function() {
+    ['f-title','f-description','f-message','f-assignee','f-tags'].forEach(function(id){document.getElementById(id).value='';});
+    document.getElementById('f-severity').value = 'medium';
+    document.getElementById('f-priority').value = 'normal';
+    overlay.classList.remove('open');
+    loadReports();
   });
-
-  ['f-title','f-description','f-message','f-assignee','f-tags'].forEach(id => {
-    document.getElementById(id).value = '';
-  });
-  document.getElementById('f-severity').value = 'medium';
-  document.getElementById('f-priority').value = 'normal';
-  closeModal();
-  await loadReports();
 }
 
-// ── BOOT ─────────────────────────────────────────────────
-// Move modal to body immediately to escape any stacking context
-(function() {
-  const m = document.getElementById('modal');
-  if (m) {
-    document.body.appendChild(m);
-    // Ensure overlay click-to-close works after reparent
-    m.addEventListener('click', function(e) { if (e.target === m) closeModal(); });
-  }
-})();
 loadReports();
 setInterval(loadReports, 3000);
 </script>
-
 </body>
 </html>`);
 });
