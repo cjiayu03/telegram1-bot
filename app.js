@@ -1,8 +1,3 @@
-Here is the complete, unified code including the Express backend server, the upgraded Telegram Bot template engines, and the operational Dashboard UI.
-
-The `/template` command and the updated line-by-line `/report` regex parsing system are now fully integrated alongside your dashboard features.
-
-```javascript
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
@@ -63,6 +58,12 @@ function incidentKeyboard(id) {
   };
 }
 
+// =========================
+// TELEGRAM → INCIDENTS
+// =========================
+
+const pendingReply = {};
+
 bot.on('callback_query', async (query) => {
   const userId = query.from.id;
   const user   = query.from.username || query.from.first_name;
@@ -117,12 +118,6 @@ bot.on('callback_query', async (query) => {
   bot.answerCallbackQuery(query.id);
 });
 
-// =========================
-// TELEGRAM → INCIDENTS
-// =========================
-
-const pendingReply = {};
-
 bot.on('message', (msg) => {
   const text = msg.text || '';
   if (!text || msg.from.is_bot) return;
@@ -174,13 +169,11 @@ bot.on('message', (msg) => {
       return bot.sendMessage(chatId, "⚠️ Please specify details or match the format layout. Type `/template` to get a structured fillable pattern.", { parse_mode: 'Markdown' });
     }
 
-    // Helper function to extract fields using line-by-line regex mappings
     const getField = (regex, fallback = '') => {
       const match = text.match(regex);
       return match && match[1] ? match[1].trim() : fallback;
     };
 
-    // Parse values safely out of the custom block lines
     const titleText    = getField(/^Title:\s*(.+)$/m, 'Untitled Telegram Report');
     const incidentType = getField(/^Type:\s*(.+)$/m, 'General');
     const severityRaw  = getField(/^Severity:\s*(.+)$/m, 'medium').toLowerCase();
@@ -226,7 +219,7 @@ bot.on('message', (msg) => {
       `*Type*: ${incidentType}\n` +
       `*Sector*: ${sector}\n` +
       `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}${locStr}\n\n` +
-      `Incident is now live on the Operational CommandCenter Dashboard.`,
+      `Incident is live on the CommandCenter dashboard.`,
       { parse_mode: 'Markdown' }
     );
 
@@ -243,7 +236,7 @@ bot.on('message', (msg) => {
     return;
   }
 
-  // Plain message fallback system inside the monitored group chat
+  // Plain fallback for regular text messages in the main group
   if (!text.startsWith('/') && String(chatId) === String(GROUP_CHAT_ID)) {
     const report = {
       id: Date.now(), user, severity: 'low', report: text,
@@ -258,53 +251,6 @@ bot.on('message', (msg) => {
       `✅ *Incident Created from group message*\n\nID: \`${report.id}\`\nSeverity: 🟡 LOW\nFrom: @${user}\n\nUse /status ${report.id} IN_PROGRESS or /status ${report.id} RESOLVED to update.`,
       { parse_mode: 'Markdown', reply_to_message_id: msg.message_id, reply_markup: incidentKeyboard(report.id) });
     return;
-  }
-
-  if (text.startsWith('/status')) {
-    const parts = text.trim().split(' ');
-    const id = parts[1], newStatus = parts[2]?.toUpperCase();
-    if (!id || !newStatus) return bot.sendMessage(chatId, '⚠️ Usage: /status <id> <OPEN|IN_PROGRESS|RESOLVED>');
-    if (!VALID_STATUSES.includes(newStatus)) return bot.sendMessage(chatId, `⚠️ Invalid status. Choose: ${VALID_STATUSES.join(', ')}`);
-    const report = reports.find(r => String(r.id) === String(id));
-    if (!report) return bot.sendMessage(chatId, `❌ Incident \`${id}\` not found.`, { parse_mode: 'Markdown' });
-    const oldStatus = report.status;
-    report.status = newStatus; report.updatedAt = now();
-    bot.sendMessage(chatId, `${statusEmoji(newStatus)} Incident \`${id}\` updated: *${oldStatus}* → *${newStatus}*`, { parse_mode: 'Markdown' });
-    bot.sendMessage(GROUP_CHAT_ID, `${statusEmoji(newStatus)} *Status Update*\n\nIncident \`${id}\` by @${user}\n${oldStatus} → *${newStatus}*`, { parse_mode: 'Markdown' });
-    return;
-  }
-
-  if (text.startsWith('/comment')) {
-    const parts = text.trim().split(' ');
-    const id = parts[1], message = parts.slice(2).join(' ');
-    if (!id || !message) return bot.sendMessage(chatId, '⚠️ Usage: /comment <id> <your message>');
-    const report = reports.find(r => String(r.id) === String(id));
-    if (!report) return bot.sendMessage(chatId, `❌ Incident \`${id}\` not found.`, { parse_mode: 'Markdown' });
-    report.comments.push({ id: Date.now(), user, message, time: now() });
-    bot.sendMessage(chatId, `💬 Comment added to incident \`${id}\`.`, { parse_mode: 'Markdown' });
-    bot.sendMessage(GROUP_CHAT_ID, `💬 *Comment on "${report.title || id}"*\n\n@${user}: ${message}`, { parse_mode: 'Markdown', reply_markup: incidentKeyboard(id) });
-    return;
-  }
-
-  if (text.startsWith('/list')) {
-    if (!reports.length) return bot.sendMessage(chatId, '📭 No incidents yet.');
-    const lines = reports.slice(0, 10).map(r =>
-      `${statusEmoji(r.status)} ${severityEmoji(r.severity)} \`${r.id}\` [${r.status}] @${r.user}: ${r.report.slice(0, 50)}`
-    );
-    bot.sendMessage(chatId, `📋 *Recent Incidents*\n\n${lines.join('\n')}`, { parse_mode: 'Markdown' });
-    return;
-  }
-
-  if (text.startsWith('/help')) {
-    bot.sendMessage(chatId,
-      `🤖 *Incident Bot Commands*\n\n` +
-      `/template\n  Get structural text pattern to fill out\n\n` +
-      `/report\n  Submit structural report profile configurations\n\n` +
-      `/status <id> <OPEN|IN_PROGRESS|RESOLVED>\n  Update incident status\n\n` +
-      `/comment <id> <message>\n  Add a comment to an incident\n\n` +
-      `/list\n  Show the 10 most recent incidents\n\n` +
-      `/help\n  Show this message`,
-      { parse_mode: 'Markdown' });
   }
 });
 
@@ -351,10 +297,6 @@ app.post('/api/report', (req, res) => {
   res.json({ success: true, report });
 });
 
-// =========================
-// UPDATE INCIDENT FIELDS
-// =========================
-
 app.patch('/api/reports/:id', (req, res) => {
   const { id } = req.params;
   const report = reports.find(r => String(r.id) === String(id));
@@ -365,10 +307,6 @@ app.patch('/api/reports/:id', (req, res) => {
   report.updatedAt = now();
   res.json({ success: true, report });
 });
-
-// =========================
-// UPDATE STATUS
-// =========================
 
 app.post('/api/reports/:id/status', (req, res) => {
   const { id } = req.params;
@@ -389,10 +327,6 @@ app.post('/api/reports/:id/status', (req, res) => {
   res.json({ success: true, report });
 });
 
-// =========================
-// ADD COMMENT
-// =========================
-
 app.post('/api/reports/:id/comment', (req, res) => {
   const { id } = req.params;
   const { message, user = 'dashboard' } = req.body;
@@ -411,10 +345,6 @@ app.post('/api/reports/:id/comment', (req, res) => {
 
   res.json({ success: true, comment });
 });
-
-// =========================
-// GET INCIDENTS
-// =========================
 
 app.get('/api/reports', (req, res) => res.json(reports));
 
@@ -447,14 +377,12 @@ app.get('/dashboard', (req, res) => {
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min-height:100vh;}
 
-/* HEADER */
 .header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
 .logo{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;letter-spacing:.04em;display:flex;align-items:center;gap:10px;}
 .logo-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4);}50%{box-shadow:0 0 0 6px rgba(239,68,68,0);}}
 .logo-dot{animation:pulse 2s infinite;}
 
-/* STATS */
 .stats-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;display:flex;overflow-x:auto;}
 .stat-item{padding:14px 24px;border-right:1px solid var(--border);min-width:110px;cursor:pointer;}
 .stat-item:hover,.stat-item.active{background:var(--surface2);}
@@ -465,10 +393,8 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .stat-prog .stat-num{color:#fbbf24;}
 .stat-res .stat-num{color:#4ade80;}
 
-/* LAYOUT */
 .layout{display:flex;height:calc(100vh - 103px);}
 
-/* LEFT PANEL */
 .left-panel{width:320px;min-width:260px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
 .panel-toolbar{padding:12px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .search-box{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;}
@@ -481,7 +407,6 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .incident-list::-webkit-scrollbar{width:4px;}
 .incident-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 
-/* INCIDENT CARD */
 .inc-card{padding:11px 12px 11px 18px;border-radius:8px;border:1px solid transparent;margin-bottom:3px;cursor:pointer;position:relative;}
 .inc-card:hover{background:var(--surface2);border-color:var(--border2);}
 .inc-card.active{background:var(--surface2);border-color:var(--accent);}
@@ -492,7 +417,6 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .inc-title{font-size:13px;font-weight:500;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .inc-meta{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
 
-/* BADGES */
 .badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Space Mono',monospace;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
 .sev-low{background:var(--sev-low);color:var(--sev-low-t);}
 .sev-medium{background:var(--sev-med);color:var(--sev-med-t);}
@@ -506,7 +430,6 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .pri-urgent{background:#450a0a;color:#f87171;}
 .src-badge{background:var(--surface2);border:1px solid var(--border2);color:var(--muted);}
 
-/* DETAIL PANEL */
 .detail-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .detail-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
@@ -526,7 +449,6 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .tags-list{display:flex;gap:6px;flex-wrap:wrap;}
 .tag{padding:3px 10px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;}
 
-/* COMMENTS */
 .comment-thread{display:flex;flex-direction:column;gap:8px;}
 .comment-item{display:flex;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
 .comment-avatar{width:28px;height:28px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Mono',monospace;}
@@ -539,11 +461,9 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .comment-input{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:none;height:40px;transition:border-color .15s,height .15s;}
 .comment-input:focus{border-color:var(--accent);height:72px;}
 
-/* EMPTY */
 .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:10px;}
 .empty-icon{font-size:44px;opacity:.3;}
 
-/* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;white-space:nowrap;}
 .btn-primary{background:var(--accent);color:#fff;}
 .btn-primary:hover{background:var(--accent2);}
@@ -556,7 +476,6 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .btn-warn{background:var(--sev-med);color:var(--sev-med-t);border:1px solid #92400e;}
 .btn-warn:hover{background:#92400e;}
 
-/* MODAL */
 #modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);align-items:center;justify-content:center;z-index:99999;padding:20px;}
 #modal-overlay.open{display:flex;}
 .modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:580px;padding:26px;display:flex;flex-direction:column;gap:14px;max-height:92vh;overflow-y:auto;}
@@ -1014,5 +933,3 @@ app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
   console.log('Dashboard: http://localhost:' + PORT + '/dashboard');
 });
-
-```
