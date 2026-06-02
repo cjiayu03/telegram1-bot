@@ -1,4 +1,3 @@
-
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
@@ -40,12 +39,6 @@ function statusEmoji(s) {
 function now() {
   return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
-
-// =========================
-// INLINE KEYBOARD HELPERS
-// =========================
-
-const pendingReply = {};
 
 // Helper to stringify location information safely
 function formatLocation(r) {
@@ -131,7 +124,6 @@ bot.on('message', (msg) => {
   const userId = msg.from.id;
   const user   = msg.from.username || msg.from.first_name;
 
-  // Intercept pending inline-button comment replies
   if (pendingReply[userId] && !text.startsWith('/')) {
     const { incidentId, promptMsgId, originMsgId } = pendingReply[userId];
     delete pendingReply[userId];
@@ -149,7 +141,6 @@ bot.on('message', (msg) => {
     return;
   }
 
-  // Plain message in group chat → create incident
   if (!text.startsWith('/') && String(chatId) === String(GROUP_CHAT_ID)) {
     const report = {
       id: Date.now(), user, severity: 'low', report: text,
@@ -659,7 +650,7 @@ function initials(name) {
 }
 function formatCoordinates(r) {
   if(!r.latDeg) return '';
-  return esc(r.latDeg) + '°' + esc(r.latMin || '00') + "\\'" + esc(r.latDir || 'N');
+  return esc(r.latDeg) + '°' + esc(r.latMin || '00') + "\\\'" + esc(r.latDir || 'N');
 }
 
 // ── MODAL ──────────────────────────────────────────────────
@@ -750,7 +741,7 @@ function renderList() {
     var typePrefix = r.incidentType ? '[' + esc(r.incidentType) + '] ' : '';
     var assignee = r.assignee ? '<span style="font-size:11px;color:#4d6278;">to ' + esc(r.assignee) + '</span>' : '';
     var time = (r.time || '').slice(5,16);
-    return '<div class="inc-card' + active + '" onclick="selectIncident(\\'' + r.id + '\\')">' +
+    return '<div class="inc-card' + active + '" onclick="selectIncident(\\\'' + r.id + '\\\')">' +
       '<div class="sev-bar ' + esc(r.severity) + '"></div>' +
       '<div class="inc-title">' + typePrefix + esc(r.title || r.report) + '</div>' +
       '<div class="inc-meta">' +
@@ -794,9 +785,9 @@ function renderDetail(r) {
     : '<div style="color:#4d6278;font-size:13px;padding:8px 0;">No comments yet.</div>';
 
   var statusBtns = '';
-  if (r.status !== 'IN_PROGRESS') statusBtns += '<button class="btn btn-warn" onclick="setStatus(\\'' + r.id + '\\',\\'IN_PROGRESS\\')">🔧 In Progress</button>';
-  if (r.status !== 'RESOLVED')    statusBtns += '<button class="btn btn-success" onclick="setStatus(\\'' + r.id + '\\',\\'RESOLVED\\')">✅ Resolve</button>';
-  if (r.status !== 'OPEN')        statusBtns += '<button class="btn btn-danger" onclick="setStatus(\\'' + r.id + '\\',\\'OPEN\\')">🆕 Reopen</button>';
+  if (r.status !== 'IN_PROGRESS') statusBtns += '<button class="btn btn-warn" onclick="setStatus(\\\'' + r.id + '\\\',\\\'IN_PROGRESS\\\')">🔧 In Progress</button>';
+  if (r.status !== 'RESOLVED')    statusBtns += '<button class="btn btn-success" onclick="setStatus(\\\'' + r.id + '\\\',\\\'RESOLVED\\\')">✅ Resolve</button>';
+  if (r.status !== 'OPEN')        statusBtns += '<button class="btn btn-danger" onclick="setStatus(\\\'' + r.id + '\\\',\\\'OPEN\\\')">🆕 Reopen</button>';
 
   var descSection = r.description
     ? '<div><div class="section-label">Description</div><div class="desc-box">' + esc(r.description) + '</div></div>'
@@ -945,5 +936,3 @@ app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
   console.log('Dashboard: http://localhost:' + PORT + '/dashboard');
 });
-
-```
