@@ -1,3 +1,8 @@
+Here is the complete, unified code including the Express backend server, the upgraded Telegram Bot template engines, and the operational Dashboard UI.
+
+The `/template` command and the updated line-by-line `/report` regex parsing system are now fully integrated alongside your dashboard features.
+
+```javascript
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
@@ -116,6 +121,8 @@ bot.on('callback_query', async (query) => {
 // TELEGRAM → INCIDENTS
 // =========================
 
+const pendingReply = {};
+
 bot.on('message', (msg) => {
   const text = msg.text || '';
   if (!text || msg.from.is_bot) return;
@@ -124,6 +131,7 @@ bot.on('message', (msg) => {
   const userId = msg.from.id;
   const user   = msg.from.username || msg.from.first_name;
 
+  // Intercept pending inline-button comment replies
   if (pendingReply[userId] && !text.startsWith('/')) {
     const { incidentId, promptMsgId, originMsgId } = pendingReply[userId];
     delete pendingReply[userId];
@@ -141,6 +149,101 @@ bot.on('message', (msg) => {
     return;
   }
 
+  // ── COMMAND: /template ──
+  if (text.startsWith('/template')) {
+    const exampleTemplate = 
+      `📝 *Copy the template below, paste it, fill it out, and send it back:*\n\n` +
+      `\`\`\`\n` +
+      `/report\n` +
+      `Title: \n` +
+      `Type: General\n` +
+      `Severity: medium\n` +
+      `Sector: \n` +
+      `Lat Deg: \n` +
+      `Lat Min: \n` +
+      `Lat Dir: N\n` +
+      `Loc Code: \n` +
+      `Description: \n` +
+      `\`\`\``;
+    return bot.sendMessage(chatId, exampleTemplate, { parse_mode: 'Markdown' });
+  }
+
+  // ── COMMAND: /report (Template-driven Parser) ──
+  if (text.startsWith('/report')) {
+    if (text.trim() === '/report') {
+      return bot.sendMessage(chatId, "⚠️ Please specify details or match the format layout. Type `/template` to get a structured fillable pattern.", { parse_mode: 'Markdown' });
+    }
+
+    // Helper function to extract fields using line-by-line regex mappings
+    const getField = (regex, fallback = '') => {
+      const match = text.match(regex);
+      return match && match[1] ? match[1].trim() : fallback;
+    };
+
+    // Parse values safely out of the custom block lines
+    const titleText    = getField(/^Title:\s*(.+)$/m, 'Untitled Telegram Report');
+    const incidentType = getField(/^Type:\s*(.+)$/m, 'General');
+    const severityRaw  = getField(/^Severity:\s*(.+)$/m, 'medium').toLowerCase();
+    const sector       = getField(/^Sector:\s*(.+)$/m, 'Unassigned');
+    const latDeg       = getField(/^Lat Deg:\s*(\d*)$/m, '');
+    const latMin       = getField(/^Lat Min:\s*(\d*)$/m, '');
+    const latDir       = getField(/^Lat Dir:\s*([NSEWnsew])$/m, 'N').toUpperCase();
+    const locationCode = getField(/^Loc Code:\s*(.+)$/m, '');
+    const description  = getField(/^Description:\s*([\s\S]*)$/m, `Reported via Telegram Template by @${user}.`);
+
+    const severity = VALID_SEVERITIES.includes(severityRaw) ? severityRaw : 'medium';
+
+    const report = {
+      id: Date.now(),
+      user: `@${user}`,
+      severity: severity,
+      report: titleText, 
+      title: titleText.slice(0, 60),
+      description: description,
+      assignee: '',
+      tags: ['telegram', 'template'],
+      priority: severity === 'critical' ? 'high' : 'normal',
+      status: 'OPEN',
+      source: 'telegram',
+      time: now(),
+      updatedAt: now(),
+      comments: [],
+      incidentType: incidentType,
+      sector: sector,
+      latDeg: latDeg,
+      latMin: latMin,
+      latDir: latDir,
+      locationCode: locationCode
+    };
+
+    reports.unshift(report);
+
+    const locStr = formatLocation(report) !== 'N/A' ? `\n📍 *Location*: ${formatLocation(report)}` : '';
+
+    bot.sendMessage(chatId,
+      `✅ *Incident Synchronized from Template*\n\n` +
+      `*ID*: \`${report.id}\`\n` +
+      `*Type*: ${incidentType}\n` +
+      `*Sector*: ${sector}\n` +
+      `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}${locStr}\n\n` +
+      `Incident is now live on the Operational CommandCenter Dashboard.`,
+      { parse_mode: 'Markdown' }
+    );
+
+    bot.sendMessage(GROUP_CHAT_ID,
+      `🚨 *New Incident* [${report.incidentType.toUpperCase()}]\n\n` +
+      `*Title*: ${report.title}\n` +
+      `*ID*: \`${report.id}\`\n` +
+      `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}\n` +
+      `*Sector*: ${sector}${locStr}\n` +
+      `*Reporter*: @${user}\n` +
+      `*Status*: 🆕 OPEN`,
+      { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) }
+    );
+    return;
+  }
+
+  // Plain message fallback system inside the monitored group chat
   if (!text.startsWith('/') && String(chatId) === String(GROUP_CHAT_ID)) {
     const report = {
       id: Date.now(), user, severity: 'low', report: text,
@@ -154,32 +257,6 @@ bot.on('message', (msg) => {
     bot.sendMessage(chatId,
       `✅ *Incident Created from group message*\n\nID: \`${report.id}\`\nSeverity: 🟡 LOW\nFrom: @${user}\n\nUse /status ${report.id} IN_PROGRESS or /status ${report.id} RESOLVED to update.`,
       { parse_mode: 'Markdown', reply_to_message_id: msg.message_id, reply_markup: incidentKeyboard(report.id) });
-    return;
-  }
-
-  if (text.startsWith('/report')) {
-    const args = text.replace('/report', '').trim().split(' ');
-    let severity = 'low', start = 0;
-    if (VALID_SEVERITIES.includes(args[0]?.toLowerCase())) {
-      severity = args[0].toLowerCase(); start = 1;
-    }
-    const reportText = args.slice(start).join(' ') || '[empty]';
-    const report = {
-      id: Date.now(), user, severity, report: reportText,
-      title: reportText.slice(0, 60), description: '', assignee: '',
-      tags: [], priority: 'normal', status: 'OPEN',
-      source: 'telegram', time: now(), updatedAt: now(), comments: [],
-      incidentType: 'Unspecified', sector: 'Unassigned',
-      latDeg: '', latMin: '', latDir: 'N', locationCode: ''
-    };
-    reports.unshift(report);
-
-    bot.sendMessage(chatId,
-      `✅ *Incident Created*\n\nID: \`${report.id}\`\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\n\nUse /status ${report.id} <OPEN|IN_PROGRESS|RESOLVED> to update it.`,
-      { parse_mode: 'Markdown' });
-    bot.sendMessage(GROUP_CHAT_ID,
-      `🚨 *New Incident*\n\nID: \`${report.id}\`\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nFrom: @${user}\nStatus: 🆕 OPEN\n\n${reportText}`,
-      { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) });
     return;
   }
 
@@ -221,7 +298,8 @@ bot.on('message', (msg) => {
   if (text.startsWith('/help')) {
     bot.sendMessage(chatId,
       `🤖 *Incident Bot Commands*\n\n` +
-      `/report [low|medium|critical] <message>\n  Create a new incident\n\n` +
+      `/template\n  Get structural text pattern to fill out\n\n` +
+      `/report\n  Submit structural report profile configurations\n\n` +
       `/status <id> <OPEN|IN_PROGRESS|RESOLVED>\n  Update incident status\n\n` +
       `/comment <id> <message>\n  Add a comment to an incident\n\n` +
       `/list\n  Show the 10 most recent incidents\n\n` +
@@ -814,7 +892,7 @@ function renderDetail(r) {
         '<div class="meta-item"><label>Sector</label><span>' + esc(r.sector || 'Unassigned') + '</span></div>' +
         '<div class="meta-item"><label>Coordinates</label><span>' + coords + '</span></div>' +
         '<div class="meta-item"><label>Loc Code</label><span>' + locCode + '</span></div>' +
-        '<div class="meta-item"><label>Reporter</label><span>@' + esc(r.user) + '</span></div>' +
+        '<div class="meta-item"><label>Reporter</label><span>' + esc(r.user) + '</span></div>' +
         '<div class="meta-item"><label>Assignee</label><span>' + assignee + '</span></div>' +
         '<div class="meta-item"><label>Created</label><span>' + esc(r.time) + '</span></div>' +
         '<div class="meta-item"><label>Updated</label><span>' + esc(r.updatedAt || r.time) + '</span></div>' +
@@ -936,3 +1014,5 @@ app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
   console.log('Dashboard: http://localhost:' + PORT + '/dashboard');
 });
+
+```
