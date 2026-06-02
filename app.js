@@ -1,3 +1,13 @@
+To add the new fields (**Incident Type**, **Location Details**, and **Sector**) to both the backend data store, the Telegram notification system, and the frontend Dashboard UI, we need to update a few key areas of your code.
+
+Here is the complete, updated code file. The updates include:
+
+* **Backend Validation & Processing:** Updated `/api/report` to parse and store the new parameters.
+* **Telegram Notification Templates:** Enhanced the Telegram alerts to display the structural location data, sector, and incident type cleanly.
+* **Dashboard Form:** Added semantic fields (including a dropdown for Lat/Long directions and specific inputs for degrees and minutes) inside the create incident modal.
+* **Incident Detail Display:** Added these fields to the main "Meta Grid" layout on the dashboard details panel so you can actually read them after creation.
+
+```javascript
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
@@ -45,6 +55,14 @@ function now() {
 // =========================
 
 const pendingReply = {};
+
+// Helper to stringify location information safely
+function formatLocation(r) {
+  if (!r.latDeg && !r.locationCode) return 'N/A';
+  const latStr = r.latDeg ? `${r.latDeg}°${r.latMin || '00'}'${r.latDir || 'N'}` : '';
+  const codeStr = r.locationCode ? `[Code: ${r.locationCode}]` : '';
+  return `${latStr} ${codeStr}`.trim();
+}
 
 function incidentKeyboard(id) {
   return {
@@ -140,15 +158,15 @@ bot.on('message', (msg) => {
     return;
   }
 
-  // ── Plain message in group chat → create incident ──────
-  // If someone types a plain message (not a command) in the GROUP chat,
-  // treat it as a low-severity incident report automatically
+  // Plain message in group chat → create incident
   if (!text.startsWith('/') && String(chatId) === String(GROUP_CHAT_ID)) {
     const report = {
       id: Date.now(), user, severity: 'low', report: text,
       title: text.slice(0, 60), description: '', assignee: '',
       tags: [], priority: 'normal', status: 'OPEN',
-      source: 'telegram', time: now(), updatedAt: now(), comments: []
+      source: 'telegram', time: now(), updatedAt: now(), comments: [],
+      incidentType: 'Unspecified', sector: 'Unassigned',
+      latDeg: '', latMin: '', latDir: 'N', locationCode: ''
     };
     reports.unshift(report);
     bot.sendMessage(chatId,
@@ -168,7 +186,9 @@ bot.on('message', (msg) => {
       id: Date.now(), user, severity, report: reportText,
       title: reportText.slice(0, 60), description: '', assignee: '',
       tags: [], priority: 'normal', status: 'OPEN',
-      source: 'telegram', time: now(), updatedAt: now(), comments: []
+      source: 'telegram', time: now(), updatedAt: now(), comments: [],
+      incidentType: 'Unspecified', sector: 'Unassigned',
+      latDeg: '', latMin: '', latDir: 'N', locationCode: ''
     };
     reports.unshift(report);
 
@@ -238,7 +258,9 @@ app.post('/api/report', (req, res) => {
   const {
     severity = 'low', message, user = 'dashboard',
     title = '', description = '', assignee = '',
-    tags = [], priority = 'normal'
+    tags = [], priority = 'normal',
+    incidentType = 'General', sector = '',
+    latDeg = '', latMin = '', latDir = 'N', locationCode = ''
   } = req.body;
 
   if (!message) return res.status(400).json({ error: 'Message required' });
@@ -250,15 +272,20 @@ app.post('/api/report', (req, res) => {
     description, assignee,
     tags: Array.isArray(tags) ? tags : [],
     priority, status: 'OPEN', source: 'dashboard',
-    time: now(), updatedAt: now(), comments: []
+    time: now(), updatedAt: now(), comments: [],
+    incidentType, sector: sector || 'Unassigned',
+    latDeg, latMin, latDir, locationCode
   };
 
   reports.unshift(report);
 
   const tagStr = report.tags.length ? `\nTags: ${report.tags.join(', ')}` : '';
   const assignStr = assignee ? `\nAssignee: ${assignee}` : '';
+  const sectorStr = report.sector ? `\nSector: ${report.sector}` : '';
+  const locStr = formatLocation(report) !== 'N/A' ? `\nLocation: ${formatLocation(report)}` : '';
+
   bot.sendMessage(GROUP_CHAT_ID,
-    `🚨 *Dashboard Incident*\n\nID: \`${report.id}\`\nTitle: ${report.title}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nPriority: ${priority.toUpperCase()}\nFrom: ${user}${assignStr}${tagStr}\nStatus: 🆕 OPEN\n\n${message}`,
+    `🚨 *Dashboard Incident* [${report.incidentType.toUpperCase()}]\n\nID: \`${report.id}\`\nTitle: ${report.title}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nPriority: ${priority.toUpperCase()}\nFrom: ${user}${assignStr}${sectorStr}${locStr}${tagStr}\nStatus: 🆕 OPEN\n\n${message}`,
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) });
 
   res.json({ success: true, report });
@@ -273,7 +300,7 @@ app.patch('/api/reports/:id', (req, res) => {
   const report = reports.find(r => String(r.id) === String(id));
   if (!report) return res.status(404).json({ error: 'Incident not found' });
 
-  const allowed = ['title', 'description', 'assignee', 'tags', 'priority', 'severity'];
+  const allowed = ['title', 'description', 'assignee', 'tags', 'priority', 'severity', 'incidentType', 'sector', 'latDeg', 'latMin', 'latDir', 'locationCode'];
   allowed.forEach(k => { if (req.body[k] !== undefined) report[k] = req.body[k]; });
   report.updatedAt = now();
   res.json({ success: true, report });
@@ -426,7 +453,7 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .detail-title{font-family:'Space Mono',monospace;font-size:17px;font-weight:700;line-height:1.3;flex:1;}
 .detail-id{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);flex-shrink:0;margin-top:4px;}
 .detail-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
-.meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px;}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:12px;}
 .meta-item label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px;}
 .meta-item span{font-size:13px;font-weight:500;}
 .action-row{display:flex;gap:8px;flex-wrap:wrap;}
@@ -472,13 +499,14 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 /* MODAL */
 #modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);align-items:center;justify-content:center;z-index:99999;padding:20px;}
 #modal-overlay.open{display:flex;}
-.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:540px;padding:26px;display:flex;flex-direction:column;gap:14px;max-height:90vh;overflow-y:auto;}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:580px;padding:26px;display:flex;flex-direction:column;gap:14px;max-height:92vh;overflow-y:auto;}
 .modal-title{font-family:'Space Mono',monospace;font-size:16px;font-weight:700;}
 .field-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
 .field-input,.field-select,.field-textarea{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s;}
 .field-input:focus,.field-select:focus,.field-textarea:focus{border-color:var(--accent);}
-.field-textarea{resize:vertical;min-height:80px;}
+.field-textarea{resize:vertical;min-height:70px;}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.geo-row{display:grid;grid-template-columns:1.5fr 1.5fr 1fr 2fr;gap:8px;}
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:4px;}
 </style>
 </head>
@@ -544,14 +572,19 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
   </div>
 </div>
 
-<!-- MODAL — lives at top level, no parent stacking context issues -->
 <div id="modal-overlay">
   <div class="modal-box" id="modal-box">
     <div class="modal-title">Create New Incident</div>
 
-    <div>
-      <label class="field-label">Title *</label>
-      <input class="field-input" id="f-title" placeholder="Short, descriptive title">
+    <div class="field-row">
+      <div>
+        <label class="field-label">Title *</label>
+        <input class="field-input" id="f-title" placeholder="Short, descriptive title">
+      </div>
+      <div>
+        <label class="field-label">Incident Type</label>
+        <input class="field-input" id="f-type" placeholder="e.g. Outage, Cyber, Security, Leak">
+      </div>
     </div>
 
     <div class="field-row">
@@ -575,24 +608,44 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
     </div>
 
     <div>
+      <label class="field-label">Location coordinates & Code</label>
+      <div class="geo-row">
+        <input class="field-input" id="f-latdeg" type="number" placeholder="Lat Deg (°)">
+        <input class="field-input" id="f-latmin" type="number" placeholder="Lat Min (')">
+        <select class="field-select" id="f-latdir">
+          <option value="N">N</option>
+          <option value="S">S</option>
+          <option value="E">E</option>
+          <option value="W">W</option>
+        </select>
+        <input class="field-input" id="f-loccode" placeholder="Location Code">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div>
+        <label class="field-label">Sector</label>
+        <input class="field-input" id="f-sector" placeholder="e.g. Sector 4, Alpha, North-Zone">
+      </div>
+      <div>
+        <label class="field-label">Assignee</label>
+        <input class="field-input" id="f-assignee" placeholder="@username">
+      </div>
+    </div>
+
+    <div>
       <label class="field-label">Description</label>
       <textarea class="field-textarea" id="f-description" placeholder="What happened? Impact, steps to reproduce..."></textarea>
     </div>
 
     <div>
       <label class="field-label">Short Report * (sent to Telegram)</label>
-      <input class="field-input" id="f-message" placeholder="One-line summary">
+      <input class="field-input" id="f-message" placeholder="One-line summary details">
     </div>
 
-    <div class="field-row">
-      <div>
-        <label class="field-label">Assignee</label>
-        <input class="field-input" id="f-assignee" placeholder="@username">
-      </div>
-      <div>
-        <label class="field-label">Tags (comma-separated)</label>
-        <input class="field-input" id="f-tags" placeholder="infra, db, auth">
-      </div>
+    <div>
+      <label class="field-label">Tags (comma-separated)</label>
+      <input class="field-input" id="f-tags" placeholder="infra, db, auth">
     </div>
 
     <div class="modal-footer">
@@ -612,6 +665,10 @@ function esc(s) {
 }
 function initials(name) {
   return String(name || '?').replace('@','').slice(0,2).toUpperCase();
+}
+function formatCoordinates(r) {
+  if(!r.latDeg) return '';
+  return esc(r.latDeg) + '°' + esc(r.latMin || '00') + "\\'" + esc(r.latDir || 'N');
 }
 
 // ── MODAL ──────────────────────────────────────────────────
@@ -685,7 +742,7 @@ function renderList() {
       if (r.status !== activeFilter) return false;
     }
     if (search) {
-      var hay = [(r.title||''),(r.report||''),(r.user||''),(r.assignee||''),(r.tags||[]).join(' ')].join(' ').toLowerCase();
+      var hay = [(r.title||''),(r.report||''),(r.user||''),(r.assignee||''),(r.incidentType||''),(r.sector||''),(r.locationCode||''),(r.tags||[]).join(' ')].join(' ').toLowerCase();
       if (!hay.includes(search)) return false;
     }
     return true;
@@ -699,11 +756,12 @@ function renderList() {
 
   el.innerHTML = list.map(function(r) {
     var active = String(r.id) === String(selectedId) ? ' active' : '';
+    var typePrefix = r.incidentType ? '[' + esc(r.incidentType) + '] ' : '';
     var assignee = r.assignee ? '<span style="font-size:11px;color:#4d6278;">to ' + esc(r.assignee) + '</span>' : '';
     var time = (r.time || '').slice(5,16);
     return '<div class="inc-card' + active + '" onclick="selectIncident(\\'' + r.id + '\\')">' +
       '<div class="sev-bar ' + esc(r.severity) + '"></div>' +
-      '<div class="inc-title">' + esc(r.title || r.report) + '</div>' +
+      '<div class="inc-title">' + typePrefix + esc(r.title || r.report) + '</div>' +
       '<div class="inc-meta">' +
         '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
         '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
@@ -754,11 +812,13 @@ function renderDetail(r) {
     : '';
 
   var assignee = r.assignee ? '@' + esc(r.assignee) : '<span style="color:#4d6278;">Unassigned</span>';
+  var coords = formatCoordinates(r) || '<span style="color:#4d6278;">N/A</span>';
+  var locCode = r.locationCode ? esc(r.locationCode) : '<span style="color:#4d6278;">N/A</span>';
 
   panel.innerHTML =
     '<div class="detail-header">' +
       '<div class="detail-title-row">' +
-        '<div class="detail-title">' + esc(r.title || r.report) + '</div>' +
+        '<div class="detail-title">[' + esc(r.incidentType || 'General') + '] ' + esc(r.title || r.report) + '</div>' +
         '<div class="detail-id">#' + r.id + '</div>' +
       '</div>' +
       '<div class="detail-badges">' +
@@ -768,6 +828,10 @@ function renderDetail(r) {
         '<span class="badge src-badge">' + esc(r.source) + '</span>' +
       '</div>' +
       '<div class="meta-grid">' +
+        '<div class="meta-item"><label>Type</label><span>' + esc(r.incidentType || 'General') + '</span></div>' +
+        '<div class="meta-item"><label>Sector</label><span>' + esc(r.sector || 'Unassigned') + '</span></div>' +
+        '<div class="meta-item"><label>Coordinates</label><span>' + coords + '</span></div>' +
+        '<div class="meta-item"><label>Loc Code</label><span>' + locCode + '</span></div>' +
         '<div class="meta-item"><label>Reporter</label><span>@' + esc(r.user) + '</span></div>' +
         '<div class="meta-item"><label>Assignee</label><span>' + assignee + '</span></div>' +
         '<div class="meta-item"><label>Created</label><span>' + esc(r.time) + '</span></div>' +
@@ -818,25 +882,49 @@ function addComment(id) {
 }
 
 function submitReport() {
-  var title       = document.getElementById('f-title').value.trim();
-  var severity    = document.getElementById('f-severity').value;
-  var priority    = document.getElementById('f-priority').value;
-  var description = document.getElementById('f-description').value.trim();
-  var message     = document.getElementById('f-message').value.trim() || title;
-  var assignee    = document.getElementById('f-assignee').value.trim();
-  var tagsRaw     = document.getElementById('f-tags').value;
-  var tags        = tagsRaw.split(',').map(function(t){return t.trim();}).filter(Boolean);
+  var title        = document.getElementById('f-title').value.trim();
+  var incidentType = document.getElementById('f-type').value.trim() || 'General';
+  var severity     = document.getElementById('f-severity').value;
+  var priority     = document.getElementById('f-priority').value;
+  var description  = document.getElementById('f-description').value.trim();
+  var message      = document.getElementById('f-message').value.trim() || title;
+  var assignee     = document.getElementById('f-assignee').value.trim();
+  var sector       = document.getElementById('f-sector').value.trim();
+  var latDeg       = document.getElementById('f-latdeg').value.trim();
+  var latMin       = document.getElementById('f-latmin').value.trim();
+  var latDir       = document.getElementById('f-latdir').value;
+  var locationCode = document.getElementById('f-loccode').value.trim();
+  var tagsRaw      = document.getElementById('f-tags').value;
+  var tags         = tagsRaw.split(',').map(function(t){return t.trim();}).filter(Boolean);
 
   if (!title) { alert('Title is required.'); return; }
 
   fetch('/api/report', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({title:title, severity:severity, priority:priority, description:description, message:message||title, assignee:assignee, tags:tags, user:'dashboard'})
+    body: JSON.stringify({
+      title: title, 
+      incidentType: incidentType,
+      severity: severity, 
+      priority: priority, 
+      description: description, 
+      message: message || title, 
+      assignee: assignee, 
+      sector: sector,
+      latDeg: latDeg,
+      latMin: latMin,
+      latDir: latDir,
+      locationCode: locationCode,
+      tags: tags, 
+      user: 'dashboard'
+    })
   }).then(function() {
-    ['f-title','f-description','f-message','f-assignee','f-tags'].forEach(function(id){document.getElementById(id).value='';});
+    ['f-title','f-type','f-description','f-message','f-assignee','f-sector','f-latdeg','f-latmin','f-loccode','f-tags'].forEach(function(id){
+      document.getElementById(id).value = '';
+    });
     document.getElementById('f-severity').value = 'medium';
     document.getElementById('f-priority').value = 'normal';
+    document.getElementById('f-latdir').value = 'N';
     overlay.classList.remove('open');
     loadReports();
   });
@@ -866,3 +954,5 @@ app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
   console.log('Dashboard: http://localhost:' + PORT + '/dashboard');
 });
+
+```
