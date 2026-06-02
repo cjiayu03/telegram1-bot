@@ -1,13 +1,4 @@
-To add the new fields (**Incident Type**, **Location Details**, and **Sector**) to both the backend data store, the Telegram notification system, and the frontend Dashboard UI, we need to update a few key areas of your code.
 
-Here is the complete, updated code file. The updates include:
-
-* **Backend Validation & Processing:** Updated `/api/report` to parse and store the new parameters.
-* **Telegram Notification Templates:** Enhanced the Telegram alerts to display the structural location data, sector, and incident type cleanly.
-* **Dashboard Form:** Added semantic fields (including a dropdown for Lat/Long directions and specific inputs for degrees and minutes) inside the create incident modal.
-* **Incident Detail Display:** Added these fields to the main "Meta Grid" layout on the dashboard details panel so you can actually read them after creation.
-
-```javascript
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
