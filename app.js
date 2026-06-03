@@ -948,17 +948,25 @@ body {
 
 /* ── CREATE MODAL ── */
 #modal-overlay {
-  display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.8);
+  background: rgba(0,0,0,.82);
+  display: flex;
   align-items: flex-start;
   justify-content: center;
   z-index: 9999;
   padding: 30px 20px;
   overflow-y: auto;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s, visibility .15s;
 }
-#modal-overlay.open { display: flex; }
+#modal-overlay.open {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: all;
+}
 
 .modal-box {
   background: var(--surface);
