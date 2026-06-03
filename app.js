@@ -678,7 +678,6 @@ body {
   background: var(--bg);
 }
 
-/* Detail header */
 .detail-topbar {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -706,7 +705,6 @@ body {
   border-radius: 3px;
 }
 
-/* Detail body */
 .detail-body {
   flex: 1;
   overflow-y: auto;
@@ -715,7 +713,6 @@ body {
 .detail-body::-webkit-scrollbar { width: 4px; }
 .detail-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-/* Field card */
 .field-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -742,7 +739,6 @@ body {
   background: var(--border);
 }
 
-/* Field rows */
 .frow {
   display: grid;
   gap: 14px;
@@ -766,7 +762,6 @@ body {
 }
 .field-label .req { color: var(--sev-crit-t); margin-left: 2px; }
 
-/* Read-only field display */
 .field-val {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -782,7 +777,6 @@ body {
 .field-val.mono { font-family: var(--font-mono); }
 .field-val.empty { color: var(--text-dim); font-style: italic; }
 
-/* Badges row */
 .status-badges {
   display: flex;
   gap: 8px;
@@ -791,7 +785,6 @@ body {
   margin-bottom: 14px;
 }
 
-/* Actions */
 .action-bar {
   display: flex;
   gap: 8px;
@@ -823,7 +816,6 @@ body {
 .btn-ghost  { background: var(--surface2); color: var(--text); border-color: var(--border2); }
 .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
 
-/* Description block */
 .desc-val {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -837,7 +829,6 @@ body {
 }
 .desc-val.empty { color: var(--text-dim); font-style: italic; }
 
-/* Comments section */
 .comment-thread {
   display: flex;
   flex-direction: column;
@@ -916,7 +907,6 @@ body {
 }
 .btn-send:hover { background: var(--accent2); }
 
-/* Tags */
 .tags-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
 .tag-chip {
   padding: 2px 10px;
@@ -928,7 +918,6 @@ body {
   font-family: var(--font-mono);
 }
 
-/* Empty state */
 .empty-state {
   flex: 1;
   display: flex;
@@ -938,25 +927,19 @@ body {
   gap: 12px;
   color: var(--text-dim);
 }
-.empty-icon {
-  font-size: 48px;
-  opacity: .25;
-}
+.empty-icon { font-size: 48px; opacity: .25; }
 .empty-label { font-family: var(--font-head); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
 
-/* ── CREATE MODAL ── */
+/* ── CREATE MODAL FIXED VIEWPORT CONFIG ── */
 #modal-overlay {
-  display: none;
-}
-#modal-overlay.open {
-  display: flex !important; /* Force layout display switch */
+  display: none; /* Controlled explicitly via functional JS toggling now */
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,.82);
+  background: rgba(0, 0, 0, 0.85);
   align-items: flex-start;
   justify-content: center;
-  z-index: 99999; /* Boosted stacking layer prioritization */
-  padding: 30px 20px;
+  z-index: 99999 !important;
+  padding: 40px 20px;
   overflow-y: auto;
 }
 
@@ -966,13 +949,10 @@ body {
   border-radius: 8px;
   width: 100%;
   max-width: 720px;
-  padding: 0;
   display: flex;
   flex-direction: column;
-  margin: auto;
 }
 
-/* Modal header */
 .modal-header {
   background: var(--surface2);
   border-bottom: 1px solid var(--border);
@@ -999,7 +979,6 @@ body {
   line-height: 1;
   padding: 2px 6px;
   border-radius: 4px;
-  transition: color .1s;
 }
 .modal-close:hover { color: var(--text-bright); }
 
@@ -1010,7 +989,6 @@ body {
   gap: 14px;
 }
 
-/* Modal field groups */
 .modal-section-title {
   font-family: var(--font-head);
   font-size: 12px;
@@ -1048,18 +1026,18 @@ body {
   font-family: var(--font-ui);
   font-size: 13px;
   outline: none;
-  transition: border-color .15s;
   width: 100%;
 }
 .m-input:focus, .m-select:focus, .m-textarea:focus { border-color: var(--accent); }
 .m-input::placeholder { color: var(--text-dim); }
-.m-select { 
-  appearance: none; 
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237d8fa8'/%3E%3C/svg%3E"); 
-  background-repeat: no-repeat; 
-  background-position: right 10px center; 
-  padding-right: 28px; 
-  cursor: pointer; 
+
+.m-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237d8fa8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  cursor: pointer;
 }
 .m-textarea { resize: vertical; min-height: 80px; }
 .m-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -1087,7 +1065,6 @@ body {
   padding: 8px 20px;
   border-radius: 4px;
   cursor: pointer;
-  transition: all .12s;
 }
 .btn-cancel:hover { border-color: var(--text-dim); color: var(--text); }
 .btn-create {
@@ -1102,7 +1079,6 @@ body {
   padding: 8px 24px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background .12s;
 }
 .btn-create:hover { background: var(--accent2); }
 
@@ -1153,7 +1129,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 </div>
 
 <div class="layout">
-
   <div class="left-panel">
     <div class="panel-search">
       <div class="search-wrap">
@@ -1181,7 +1156,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
       <div style="font-size:12px;margin-top:4px;">or create one with + Create Report</div>
     </div>
   </div>
-
 </div>
 
 <div id="modal-overlay">
@@ -1191,7 +1165,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
       <button class="modal-close" id="modal-close">✕</button>
     </div>
     <div class="modal-body">
-
       <div class="m-row-2">
         <div class="m-field">
           <label class="m-label">Report Title (Auto Generated) <span class="req">*</span></label>
@@ -1250,7 +1223,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
         </div>
         <div class="m-field">
           <label class="m-label">Location Code <span class="req">*</span></label>
-          <input class="m-input" id="f-loccode" placeholder="e.g. CHANGI GENERAL PURPOSE ANCHORAGE">
+          <input class="m-input" id="f-loccode" placeholder="e.g. ACGP">
         </div>
       </div>
 
@@ -1320,7 +1293,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
           </select>
         </div>
       </div>
-
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="cancel-btn">Cancel</button>
@@ -1349,69 +1321,72 @@ document.addEventListener('DOMContentLoaded', function() {
     return lat || lon;
   }
 
-  // Clock
+  // Live Clock setup
   function updateClock() {
     var now = new Date();
     var d = now.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}).toUpperCase();
     var t = now.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-    document.getElementById('live-clock').innerHTML = d + ' <span>' + t + '</span>';
+    var clockEl = document.getElementById('live-clock');
+    if (clockEl) clockEl.innerHTML = d + ' <span>' + t + '</span>';
   }
   updateClock();
   setInterval(updateClock, 1000);
 
-  // Modal handlers
+  // --- SAFE MODAL ANIMATION HANDLERS ---
   var overlay = document.getElementById('modal-overlay');
-  document.getElementById('new-btn').onclick = function() {
-    var now = new Date();
-    var iso = now.toISOString().slice(0,16);
-    document.getElementById('f-datetime').value = iso;
-    
-    // Direct display overrides to ensure rendering engines wake up
-    var overlay = document.getElementById('modal-overlay');
-    overlay.style.display = 'flex';
-    overlay.classList.add('open');
-    
-    document.getElementById('f-title').focus();
-  };
-  function closeModal() { 
-    var overlay = document.getElementById('modal-overlay');
-    overlay.style.display = 'none';
-    overlay.classList.remove('open'); 
+  var newBtn = document.getElementById('new-btn');
+  
+  if (newBtn && overlay) {
+    newBtn.onclick = function() {
+      var now = new Date();
+      var iso = now.toISOString().slice(0,16);
+      var dateInput = document.getElementById('f-datetime');
+      if (dateInput) dateInput.value = iso;
+      
+      // Explicit style activation to handle rendering layers
+      overlay.style.setProperty('display', 'flex', 'important');
+      
+      var titleField = document.getElementById('f-title');
+      if (titleField) titleField.focus();
+    };
   }
-  document.getElementById('cancel-btn').onclick = closeModal;
-  document.getElementById('modal-close').onclick = closeModal;
-  overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
-  document.addEventListener('keydown', function(e) { if (e.key==='Escape') closeModal(); });
-  document.getElementById('submit-btn').onclick = submitReport;
 
-  // Global Context Setup: Event Delegation to capture actions safely 
+  function closeModal() { 
+    if (overlay) overlay.style.display = 'none'; 
+  }
+  
+  if (document.getElementById('cancel-btn')) document.getElementById('cancel-btn').onclick = closeModal;
+  if (document.getElementById('modal-close')) document.getElementById('modal-close').onclick = closeModal;
+  
+  if (overlay) {
+    overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
+  }
+  document.addEventListener('keydown', function(e) { if (e.key==='Escape') closeModal(); });
+  
+  var submitBtn = document.getElementById('submit-btn');
+  if (submitBtn) submitBtn.onclick = submitReport;
+
+  // Global action delegations 
   document.body.addEventListener('click', function(e) {
     var targetStatusBtn = e.target.closest('.status-action-btn');
     if (targetStatusBtn) {
-      var id = targetStatusBtn.dataset.id;
-      var targetStatus = targetStatusBtn.dataset.status;
-      setStatus(id, targetStatus);
+      setStatus(targetStatusBtn.dataset.id, targetStatusBtn.dataset.status);
       return;
     }
-
     var targetSendBtn = e.target.closest('#send-btn');
     if (targetSendBtn) {
-      var reportId = targetSendBtn.dataset.id;
-      addComment(reportId);
+      addComment(targetSendBtn.dataset.id);
     }
   });
 
-  // Catch dynamic keystrokes inside dynamic components safely
   document.body.addEventListener('keydown', function(e) {
     var targetCommentInput = e.target.closest('#comment-input');
     if (targetCommentInput && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      var reportId = targetCommentInput.dataset.id;
-      addComment(reportId);
+      addComment(targetCommentInput.dataset.id);
     }
   });
 
-  // Fetch API Sync Core
   function loadReports() {
     fetch('/api/reports')
       .then(function(r){ return r.json(); })
@@ -1429,10 +1404,9 @@ document.addEventListener('DOMContentLoaded', function() {
           if (r) renderDetail(r);
         }
       })
-      .catch(function(e){ console.error(e); });
+      .catch(function(e){ console.error('Fetch Sync failed', e); });
   }
 
-  // Filter Event Attachment
   document.querySelectorAll('.ftab').forEach(function(tab) {
     tab.onclick = function() {
       activeFilter = tab.dataset.f;
@@ -1444,19 +1418,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
   ['stat-crit','stat-open','stat-prog','stat-res','stat-all'].forEach(function(id) {
     var map = {'stat-crit':'critical','stat-open':'OPEN','stat-prog':'IN_PROGRESS','stat-res':'RESOLVED','stat-all':''};
-    document.getElementById(id).onclick = function() {
-      activeFilter = map[id];
-      document.querySelectorAll('.ftab').forEach(function(t){
-        t.classList.toggle('active', t.dataset.f === activeFilter);
-      });
-      renderList();
-    };
+    var cell = document.getElementById(id);
+    if (cell) {
+      cell.onclick = function() {
+        activeFilter = map[id];
+        document.querySelectorAll('.ftab').forEach(function(t){
+          t.classList.toggle('active', t.dataset.f === activeFilter);
+        });
+        renderList();
+      };
+    }
   });
 
-  document.getElementById('search-input').oninput = renderList;
+  var searchField = document.getElementById('search-input');
+  if (searchField) searchField.oninput = renderList;
 
   function renderList() {
-    var search = (document.getElementById('search-input').value || '').toLowerCase();
+    var searchInput = document.getElementById('search-input');
+    var search = (searchInput ? searchInput.value : '').toLowerCase();
+    
     var list = allReports.filter(function(r) {
       if (activeFilter === 'critical' || activeFilter === 'medium' || activeFilter === 'low') {
         if (r.severity !== activeFilter) return false;
@@ -1473,6 +1453,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('record-count').textContent = list.length + ' record' + (list.length!==1?'s':'');
 
     var el = document.getElementById('inc-list');
+    if (!el) return;
     if (!list.length) {
       el.innerHTML = '<div style="padding:20px;color:var(--text-dim);font-size:13px;text-align:center;font-family:var(--font-mono);">NO RECORDS MATCH</div>';
       return;
@@ -1504,10 +1485,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function renderDetail(r) {
     var panel = document.getElementById('detail-panel');
+    if (!panel) return;
     var locCode = r.locationCode || '';
     var gridRef = r.gridRef || '';
 
-    // Fixed unescaped inline parameter strings using custom data-attributes instead
     var statusBtns = '';
     if (r.status !== 'IN_PROGRESS') statusBtns += '<button class="btn btn-prog status-action-btn" data-id="' + r.id + '" data-status="IN_PROGRESS">🔧 In Progress</button>';
     if (r.status !== 'RESOLVED')    statusBtns += '<button class="btn btn-res status-action-btn" data-id="' + r.id + '" data-status="RESOLVED">✅ Resolve</button>';
@@ -1639,27 +1620,27 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function submitReport() {
-    var title       = document.getElementById('f-title').value.trim();
-    var incType     = document.getElementById('f-type').value.trim() || 'INCIDENT REPORT';
-    var nature      = document.getElementById('f-nature').value.trim();
-    var severity    = document.getElementById('f-severity').value;
-    var priority    = document.getElementById('f-priority').value;
-    var description = document.getElementById('f-description').value.trim();
-    var message     = document.getElementById('f-message').value.trim() || title;
-    var assignee    = document.getElementById('f-assignee').value.trim();
-    var sector      = document.getElementById('f-sector').value;
-    var latDeg      = document.getElementById('f-latdeg').value.trim();
-    var latMin      = document.getElementById('f-latmin').value.trim();
-    var latDir      = document.getElementById('f-latdir').value;
-    var lonDeg      = document.getElementById('f-londeg').value.trim();
-    var lonMin      = document.getElementById('f-lonmin').value.trim();
-    var lonDir      = document.getElementById('f-londir').value;
-    var locCode     = document.getElementById('f-loccode').value.trim();
-    var gridRef     = document.getElementById('f-gridref').value.trim();
-    var tags        = document.getElementById('f-tags').value.split(',').map(function(t){ return t.trim(); }).filter(Boolean);
+    var title = document.getElementById('f-title') ? document.getElementById('f-title').value.trim() : '';
+    var incType = document.getElementById('f-type') ? document.getElementById('f-type').value.trim() : 'INCIDENT REPORT';
+    var nature = document.getElementById('f-nature') ? document.getElementById('f-nature').value.trim() : '';
+    var severity = document.getElementById('f-severity') ? document.getElementById('f-severity').value : 'medium';
+    var priority = document.getElementById('f-priority') ? document.getElementById('f-priority').value : 'normal';
+    var description = document.getElementById('f-description') ? document.getElementById('f-description').value.trim() : '';
+    var message = document.getElementById('f-message') ? document.getElementById('f-message').value.trim() : title;
+    var assignee = document.getElementById('f-assignee') ? document.getElementById('f-assignee').value.trim() : '';
+    var sector = document.getElementById('f-sector') ? document.getElementById('f-sector').value : '';
+    var latDeg = document.getElementById('f-latdeg') ? document.getElementById('f-latdeg').value.trim() : '';
+    var latMin = document.getElementById('f-latmin') ? document.getElementById('f-latmin').value.trim() : '';
+    var latDir = document.getElementById('f-latdir') ? document.getElementById('f-latdir').value : 'N';
+    var lonDeg = document.getElementById('f-londeg') ? document.getElementById('f-londeg').value.trim() : '';
+    var lonMin = document.getElementById('f-lonmin') ? document.getElementById('f-lonmin').value.trim() : '';
+    var lonDir = document.getElementById('f-londir') ? document.getElementById('f-londir').value : 'E';
+    var locCode = document.getElementById('f-loccode') ? document.getElementById('f-loccode').value.trim() : '';
+    var gridRef = document.getElementById('f-gridref') ? document.getElementById('f-gridref').value.trim() : '';
+    var tagInput = document.getElementById('f-tags');
+    var tags = tagInput ? tagInput.value.split(',').map(function(t){ return t.trim(); }).filter(Boolean) : [];
 
     if (!title) { alert('Report Title is required.'); return; }
-    if (!message) { alert('Short Report Summary is required.'); return; }
 
     fetch('/api/report', {
       method: 'POST',
@@ -1675,37 +1656,18 @@ document.addEventListener('DOMContentLoaded', function() {
         tags: tags, user: 'dashboard'
       })
     })
-    .then(function(res) { 
-      if (!res.ok) throw new Error('Network response was not ok');
-      return res.json(); 
-    })
+    .then(function(res) { return res.json(); })
     .then(function(data) {
-      // Safe cleanup array: clears fields only if they actually exist in the DOM
       var fieldsToClear = ['f-title','f-type','f-nature','f-reporter','f-description','f-message','f-assignee','f-latdeg','f-latmin','f-londeg','f-lonmin','f-loccode','f-gridref','f-tags'];
       fieldsToClear.forEach(function(id) {
-        var targetField = document.getElementById(id);
-        if (targetField) targetField.value = '';
+        var el = document.getElementById(id);
+        if (el) el.value = '';
       });
-
-      // Reset dropdown selectors safely
-      if (document.getElementById('f-severity')) document.getElementById('f-severity').value = 'medium';
-      if (document.getElementById('f-priority')) document.getElementById('f-priority').value = 'normal';
-      if (document.getElementById('f-latdir'))  document.getElementById('f-latdir').value = 'N';
-      if (document.getElementById('f-londir'))  document.getElementById('f-londir').value = 'E';
-      if (document.getElementById('f-sector'))  document.getElementById('f-sector').value = '';
-      
       closeModal();
-
-      // Set the active selected panel to the new item and force refresh
-      if (data && data.report && data.report.id) {
-        selectedId = data.report.id;
-      }
+      if (data && data.report) selectedId = data.report.id;
       loadReports();
     })
-    .catch(function(err) {
-      console.error('Submission failed:', err);
-      alert('Failed to save report. Check your server terminal console log.');
-    });
+    .catch(function(err) { console.error('Submission broken', err); });
   }
 
   loadReports();
