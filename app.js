@@ -1321,6 +1321,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (lat && lon) return lat + ' / ' + lon;
     return lat || lon;
   }
+  function findClosest(el, selector) {
+    while (el && el !== document) {
+      if (el.matches && el.matches(selector)) return el;
+      el = el.parentNode;
+    }
+    return null;
+  }
 
   // Live Clock setup
   function updateClock() {
@@ -1375,19 +1382,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Global action delegations 
   document.body.addEventListener('click', function(e) {
-    var targetStatusBtn = e.target.closest('.status-action-btn');
+    var targetStatusBtn = findClosest(e.target, '.status-action-btn');
     if (targetStatusBtn) {
       setStatus(targetStatusBtn.dataset.id, targetStatusBtn.dataset.status);
       return;
     }
-    var targetSendBtn = e.target.closest('#send-btn');
+    var targetSendBtn = findClosest(e.target, '#send-btn');
     if (targetSendBtn) {
       addComment(targetSendBtn.dataset.id);
     }
   });
 
   document.body.addEventListener('keydown', function(e) {
-    var targetCommentInput = e.target.closest('#comment-input');
+    var targetCommentInput = findClosest(e.target, '#comment-input');
     if (targetCommentInput && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       addComment(targetCommentInput.dataset.id);
@@ -1467,7 +1474,7 @@ document.addEventListener('DOMContentLoaded', function() {
         (r.tags || []).join(' ')
       ].join(' ').toLowerCase();
 
-      if (!hay.includes(search)) return false;
+      if (hay.indexOf(search) === -1) return false;
     }
 
     return true;
@@ -1497,33 +1504,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var time = (r.time || '').slice(5, 16);
 
-    return \`
-      <div class="inc-row\${active}" onclick="selectReport('\${r.id}')">
-        <div class="sev-stripe \${esc(r.severity)}"></div>
-
-        <div class="inc-row-type">
-          \${typeLabel}
-        </div>
-
-        <div class="inc-row-title">
-          \${esc(r.title || r.report)}
-        </div>
-
-        <div class="inc-row-meta">
-          <span class="badge sev-\${esc(r.severity)}">
-            \${esc(r.severity)}
-          </span>
-
-          <span class="badge st-\${esc(r.status)}">
-            \${r.status.replace('_', ' ')}
-          </span>
-
-          <span class="inc-time">
-            \${time}
-          </span>
-        </div>
-      </div>
-    \`;
+    return '' +
+      '<div class="inc-row' + active + '" onclick="selectReport(\'' + esc(r.id) + '\')">' +
+        '<div class="sev-stripe ' + esc(r.severity) + '"></div>' +
+        '<div class="inc-row-type">' + typeLabel + '</div>' +
+        '<div class="inc-row-title">' + esc(r.title || r.report) + '</div>' +
+        '<div class="inc-row-meta">' +
+          '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+          '<span class="badge st-' + esc(r.status) + '">' + String(r.status || '').replace('_', ' ') + '</span>' +
+          '<span class="inc-time">' + time + '</span>' +
+        '</div>' +
+      '</div>';
   }).join('');
 }
 
