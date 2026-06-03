@@ -279,7 +279,7 @@ app.post('/api/report', (req, res) => {
   const locStr    = formatLocation(report) !== 'N/A' ? `\nLocation: ${formatLocation(report)}` : '';
 
   bot.sendMessage(GROUP_CHAT_ID,
-    `🚨 *Dashboard Incident* [${report.incidentType.toUpperCase()}]\n\nID: \`${report.id}\`\nTitle: ${report.title}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nPriority: ${priority.toUpperCase()}\nFrom: ${user}${assignStr}${sectorStr}${locStr}${tagStr}\nStatus: 🆕 OPEN\n\n${message}`,
+    `🚨 *Dashboard Incident* [${report.incidentType.toUpperCase()}]\n\nID: \`${report.id}\`\nTitle: ${report.title}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nPriority: ${report.priority}${sectorStr}${locStr}${tagStr}${assignStr}\n*Status*: 🆕 OPEN`,
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) });
 
   res.json({ success: true, report });
@@ -1490,33 +1490,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var time = (r.time || '').slice(5, 16);
 
-    return `
-      <div class="inc-row${active}" onclick="selectReport('${r.id}')">
-        <div class="sev-stripe ${esc(r.severity)}"></div>
+    return \`
+      <div class="inc-row\${active}" onclick="selectReport('\${r.id}')">
+        <div class="sev-stripe \${esc(r.severity)}"></div>
 
         <div class="inc-row-type">
-          ${typeLabel}
+          \${typeLabel}
         </div>
 
         <div class="inc-row-title">
-          ${esc(r.title || r.report)}
+          \${esc(r.title || r.report)}
         </div>
 
         <div class="inc-row-meta">
-          <span class="badge sev-${esc(r.severity)}">
-            ${esc(r.severity)}
+          <span class="badge sev-\${esc(r.severity)}">
+            \${esc(r.severity)}
           </span>
 
-          <span class="badge st-${esc(r.status)}">
-            ${r.status.replace('_', ' ')}
+          <span class="badge st-\${esc(r.status)}">
+            \${r.status.replace('_', ' ')}
           </span>
 
           <span class="inc-time">
-            ${time}
+            \${time}
           </span>
         </div>
       </div>
-    `;
+    \`;
   }).join('');
 }
 
