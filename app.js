@@ -348,7 +348,7 @@ app.get('/dashboard', (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Incident Command Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
 <style>
 :root {
   --bg:       #0e1015;
@@ -948,24 +948,18 @@ body {
 
 /* ── CREATE MODAL ── */
 #modal-overlay {
+  display: none;
+}
+#modal-overlay.open {
+  display: flex;
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,.82);
-  display: flex;
   align-items: flex-start;
   justify-content: center;
   z-index: 9999;
   padding: 30px 20px;
   overflow-y: auto;
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .15s, visibility .15s;
-}
-#modal-overlay.open {
-  visibility: visible;
-  opacity: 1;
-  pointer-events: all;
 }
 
 .modal-box {
@@ -1349,6 +1343,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
 var allReports = [];
 var activeFilter = '';
 var selectedId = null;
@@ -1692,6 +1687,7 @@ function submitReport() {
 
 loadReports();
 setInterval(loadReports, 3000);
+}); // end DOMContentLoaded
 </script>
 </body>
 </html>`);
