@@ -50,7 +50,7 @@ function formatLocation(r) {
 function incidentKeyboard(id) {
   return {
     inline_keyboard: [[
-      { text: '💬 Comment',    callback_data: `comment:${id}` },
+      { text: '💬 Comment',     callback_data: `comment:${id}` },
       { text: '🔧 In Progress', callback_data: `status:${id}:IN_PROGRESS` },
       { text: '✅ Resolve',    callback_data: `status:${id}:RESOLVED` }
     ]]
@@ -348,10 +348,10 @@ app.get('/dashboard', (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Incident Command Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" media="print" onload="this.media=\'all\'">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 :root {
-  --bg:       #0e1015;
+  --bg:        #0e1015;
   --surface:  #161a22;
   --surface2: #1c2130;
   --surface3: #222736;
@@ -678,7 +678,7 @@ body {
   background: var(--bg);
 }
 
-/* Detail header — mimics "Create Report" header bar */
+/* Detail header */
 .detail-topbar {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
@@ -706,7 +706,7 @@ body {
   border-radius: 3px;
 }
 
-/* Detail body — the form-like card layout */
+/* Detail body */
 .detail-body {
   flex: 1;
   overflow-y: auto;
@@ -715,7 +715,7 @@ body {
 .detail-body::-webkit-scrollbar { width: 4px; }
 .detail-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-/* Field card — matches the dark card aesthetic */
+/* Field card */
 .field-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -751,8 +751,6 @@ body {
 .frow:last-child { margin-bottom: 0; }
 .frow-2 { grid-template-columns: 1fr 1fr; }
 .frow-3 { grid-template-columns: 1fr 1fr 1fr; }
-.frow-4 { grid-template-columns: 1.2fr 1.2fr 0.8fr 2fr; }
-.frow-5 { grid-template-columns: 1fr 1fr 0.7fr 1.4fr 1fr; }
 
 .field {
   display: flex;
@@ -974,7 +972,7 @@ body {
   margin: auto;
 }
 
-/* Modal header — exactly like the reference "Create Report" bar */
+/* Modal header */
 .modal-header {
   background: var(--surface2);
   border-bottom: 1px solid var(--border);
@@ -1055,7 +1053,14 @@ body {
 }
 .m-input:focus, .m-select:focus, .m-textarea:focus { border-color: var(--accent); }
 .m-input::placeholder { color: var(--text-dim); }
-.m-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237d8fa8'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; cursor: pointer; }
+.m-select { 
+  appearance: none; 
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237d8fa8'/%3E%3C/svg%3E"); 
+  background-repeat: no-repeat; 
+  background-position: right 10px center; 
+  padding-right: 28px; 
+  cursor: pointer; 
+}
 .m-textarea { resize: vertical; min-height: 80px; }
 .m-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .m-row-4 { display: grid; grid-template-columns: 1.2fr 1.2fr 0.7fr 2fr; gap: 10px; }
@@ -1101,16 +1106,11 @@ body {
 }
 .btn-create:hover { background: var(--accent2); }
 
-/* Location pin icon for modal */
-.loc-icon { color: var(--accent); font-size: 14px; vertical-align: middle; }
-
-/* Divider */
 hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 </style>
 </head>
 <body>
 
-<!-- TOPBAR -->
 <div class="topbar">
   <div class="topbar-left">
     <div class="system-logo">
@@ -1125,7 +1125,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
   </div>
 </div>
 
-<!-- STATS ROW -->
 <div class="stats-row">
   <div class="stat-cell s-crit" id="stat-crit">
     <div class="stat-val" id="cnt-critical">0</div>
@@ -1153,10 +1152,8 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
   </div>
 </div>
 
-<!-- MAIN LAYOUT -->
 <div class="layout">
 
-  <!-- LEFT: INCIDENT LIST -->
   <div class="left-panel">
     <div class="panel-search">
       <div class="search-wrap">
@@ -1177,7 +1174,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
     <div class="inc-list" id="inc-list"></div>
   </div>
 
-  <!-- RIGHT: DETAIL VIEW -->
   <div class="detail-panel" id="detail-panel">
     <div class="empty-state">
       <div class="empty-icon">📋</div>
@@ -1188,7 +1184,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 
 </div>
 
-<!-- CREATE REPORT MODAL -->
 <div id="modal-overlay">
   <div class="modal-box">
     <div class="modal-header">
@@ -1197,11 +1192,10 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
     </div>
     <div class="modal-body">
 
-      <!-- Row 1: Title + Type -->
       <div class="m-row-2">
         <div class="m-field">
           <label class="m-label">Report Title (Auto Generated) <span class="req">*</span></label>
-          <input class="m-input" id="f-title" placeholder="e.g. EM SHONA, OPERATIONAL BUNKER SPILL @ CHANGI...">
+          <input class="m-input" id="f-title" placeholder="e.g. EM SHONA, OPERATIONAL BUNKER SPILL...">
         </div>
         <div class="m-field">
           <label class="m-label">Report Type</label>
@@ -1209,7 +1203,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
         </div>
       </div>
 
-      <!-- Row 2: Date/Time + Nature of Incident -->
       <div class="m-row-2">
         <div class="m-field">
           <label class="m-label">Report Date &amp; Time</label>
@@ -1221,7 +1214,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
         </div>
       </div>
 
-      <!-- Row 3: Reported By + Severity -->
       <div class="m-row-2">
         <div class="m-field">
           <label class="m-label">Reported By</label>
@@ -1240,7 +1232,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
       <hr class="divider">
       <div class="modal-section-title">📍 Location</div>
 
-      <!-- Lat row -->
       <div class="m-row-4">
         <div class="m-field">
           <label class="m-label">Lat Deg °</label>
@@ -1259,11 +1250,10 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
         </div>
         <div class="m-field">
           <label class="m-label">Location Code <span class="req">*</span></label>
-          <input class="m-input" id="f-loccode" placeholder="e.g. CHANGI GENERAL PURPOSE ANCHORAGE (ACGP)">
+          <input class="m-input" id="f-loccode" placeholder="e.g. CHANGI GENERAL PURPOSE ANCHORAGE">
         </div>
       </div>
 
-      <!-- Lon row -->
       <div class="m-row-5">
         <div class="m-field">
           <label class="m-label">Lon Deg °</label>
@@ -1299,13 +1289,11 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 
       <hr class="divider">
 
-      <!-- Details of Incident -->
       <div class="m-field">
         <label class="m-label">Details of Incident <span class="req">*</span></label>
-        <textarea class="m-textarea" id="f-description" style="min-height:100px;" placeholder="Weather Information (NEA)&#10;-Sky (Clear, Cloudy, Overcast, Rain, etc)&#10;-Wind (Direction x Speed)&#10;..."></textarea>
+        <textarea class="m-textarea" id="f-description" style="min-height:100px;" placeholder="Weather Information..."></textarea>
       </div>
 
-      <!-- Short Report + Tags -->
       <div class="m-row-2">
         <div class="m-field">
           <label class="m-label">Short Report Summary <span class="req">*</span></label>
@@ -1313,11 +1301,10 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
         </div>
         <div class="m-field">
           <label class="m-label">Tags (comma-separated)</label>
-          <input class="m-input" id="f-tags" placeholder="e.g. bunker, spill, vessel">
+          <input class="m-input" id="f-tags" placeholder="e.g. bunker, spill">
         </div>
       </div>
 
-      <!-- Assignee + Priority -->
       <div class="m-row-2">
         <div class="m-field">
           <label class="m-label">Assignee</label>
@@ -1344,350 +1331,360 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-var allReports = [];
-var activeFilter = '';
-var selectedId = null;
+  var allReports = [];
+  var activeFilter = '';
+  var selectedId = null;
 
-function esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function initials(name) {
-  return String(name || '?').replace('@','').slice(0,2).toUpperCase();
-}
-function formatCoords(r) {
-  var lat = r.latDeg ? (r.latDeg + '° ' + (r.latMin||'00') + "' " + (r.latDir||'N')) : '';
-  var lon = r.lonDeg ? (r.lonDeg + '° ' + (r.lonMin||'00') + "' " + (r.lonDir||'E')) : '';
-  if (!lat && !lon) return '';
-  if (lat && lon) return lat + ' / ' + lon;
-  return lat || lon;
-}
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function initials(name) {
+    return String(name || '?').replace('@','').slice(0,2).toUpperCase();
+  }
+  function formatCoords(r) {
+    var lat = r.latDeg ? (r.latDeg + '° ' + (r.latMin||'00') + "' " + (r.latDir||'N')) : '';
+    var lon = r.lonDeg ? (r.lonDeg + '° ' + (r.lonMin||'00') + "' " + (r.lonDir||'E')) : '';
+    if (!lat && !lon) return '';
+    if (lat && lon) return lat + ' / ' + lon;
+    return lat || lon;
+  }
 
-// Clock
-function updateClock() {
-  var now = new Date();
-  var d = now.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}).toUpperCase();
-  var t = now.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  document.getElementById('live-clock').innerHTML = d + ' <span>' + t + '</span>';
-}
-updateClock();
-setInterval(updateClock, 1000);
+  // Clock
+  function updateClock() {
+    var now = new Date();
+    var d = now.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}).toUpperCase();
+    var t = now.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    document.getElementById('live-clock').innerHTML = d + ' <span>' + t + '</span>';
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
 
-// Modal
-var overlay = document.getElementById('modal-overlay');
-document.getElementById('new-btn').onclick = function() {
-  // pre-fill datetime
-  var now = new Date();
-  var iso = now.toISOString().slice(0,16);
-  document.getElementById('f-datetime').value = iso;
-  overlay.classList.add('open');
-  document.getElementById('f-title').focus();
-};
-function closeModal() { overlay.classList.remove('open'); }
-document.getElementById('cancel-btn').onclick = closeModal;
-document.getElementById('modal-close').onclick = closeModal;
-overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
-document.addEventListener('keydown', function(e) { if (e.key==='Escape') closeModal(); });
-document.getElementById('submit-btn').onclick = submitReport;
-
-// Load
-function loadReports() {
-  fetch('/api/reports')
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      allReports = data;
-      document.getElementById('cnt-all').textContent      = data.length;
-      document.getElementById('cnt-critical').textContent = data.filter(function(r){ return r.severity==='critical'; }).length;
-      document.getElementById('cnt-open').textContent     = data.filter(function(r){ return r.status==='OPEN'; }).length;
-      document.getElementById('cnt-prog').textContent     = data.filter(function(r){ return r.status==='IN_PROGRESS'; }).length;
-      document.getElementById('cnt-res').textContent      = data.filter(function(r){ return r.status==='RESOLVED'; }).length;
-      document.getElementById('sync-label').textContent   = new Date().toLocaleTimeString();
-      renderList();
-      if (selectedId) {
-        var r = allReports.find(function(r){ return String(r.id)===String(selectedId); });
-        if (r) renderDetail(r);
-      }
-    })
-    .catch(function(e){ console.error(e); });
-}
-
-// Filters
-document.querySelectorAll('.ftab').forEach(function(tab) {
-  tab.onclick = function() {
-    activeFilter = tab.dataset.f;
-    document.querySelectorAll('.ftab').forEach(function(t){ t.classList.remove('active'); });
-    tab.classList.add('active');
-    renderList();
+  // Modal handlers
+  var overlay = document.getElementById('modal-overlay');
+  document.getElementById('new-btn').onclick = function() {
+    var now = new Date();
+    var iso = now.toISOString().slice(0,16);
+    document.getElementById('f-datetime').value = iso;
+    overlay.classList.add('open');
+    document.getElementById('f-title').focus();
   };
-});
+  function closeModal() { overlay.classList.remove('open'); }
+  document.getElementById('cancel-btn').onclick = closeModal;
+  document.getElementById('modal-close').onclick = closeModal;
+  overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
+  document.addEventListener('keydown', function(e) { if (e.key==='Escape') closeModal(); });
+  document.getElementById('submit-btn').onclick = submitReport;
 
-['stat-crit','stat-open','stat-prog','stat-res','stat-all'].forEach(function(id) {
-  var map = {'stat-crit':'critical','stat-open':'OPEN','stat-prog':'IN_PROGRESS','stat-res':'RESOLVED','stat-all':''};
-  document.getElementById(id).onclick = function() {
-    activeFilter = map[id];
-    document.querySelectorAll('.ftab').forEach(function(t){
-      t.classList.toggle('active', t.dataset.f === activeFilter);
-    });
-    renderList();
-  };
-});
-
-document.getElementById('search-input').oninput = renderList;
-
-// Render list
-function renderList() {
-  var search = (document.getElementById('search-input').value || '').toLowerCase();
-  var list = allReports.filter(function(r) {
-    if (activeFilter === 'critical' || activeFilter === 'medium' || activeFilter === 'low') {
-      if (r.severity !== activeFilter) return false;
-    } else if (activeFilter) {
-      if (r.status !== activeFilter) return false;
+  // Global Context Setup: Event Delegation to capture actions safely 
+  document.body.addEventListener('click', function(e) {
+    var targetStatusBtn = e.target.closest('.status-action-btn');
+    if (targetStatusBtn) {
+      var id = targetStatusBtn.dataset.id;
+      var targetStatus = targetStatusBtn.dataset.status;
+      setStatus(id, targetStatus);
+      return;
     }
-    if (search) {
-      var hay = [(r.title||''),(r.report||''),(r.user||''),(r.incidentType||''),(r.sector||''),(r.locationCode||''),(r.nature||''),(r.tags||[]).join(' ')].join(' ').toLowerCase();
-      if (!hay.includes(search)) return false;
+
+    var targetSendBtn = e.target.closest('#send-btn');
+    if (targetSendBtn) {
+      var reportId = targetSendBtn.dataset.id;
+      addComment(reportId);
     }
-    return true;
   });
 
-  document.getElementById('record-count').textContent = list.length + ' record' + (list.length!==1?'s':'');
+  // Catch dynamic keystrokes inside dynamic components safely
+  document.body.addEventListener('keydown', function(e) {
+    var targetCommentInput = e.target.closest('#comment-input');
+    if (targetCommentInput && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      var reportId = targetCommentInput.dataset.id;
+      addComment(reportId);
+    }
+  });
 
-  var el = document.getElementById('inc-list');
-  if (!list.length) {
-    el.innerHTML = '<div style="padding:20px;color:var(--text-dim);font-size:13px;text-align:center;font-family:var(--font-mono);">NO RECORDS MATCH</div>';
-    return;
+  // Fetch API Sync Core
+  function loadReports() {
+    fetch('/api/reports')
+      .then(function(r){ return r.json(); })
+      .then(function(data) {
+        allReports = data;
+        document.getElementById('cnt-all').textContent      = data.length;
+        document.getElementById('cnt-critical').textContent = data.filter(function(r){ return r.severity==='critical'; }).length;
+        document.getElementById('cnt-open').textContent     = data.filter(function(r){ return r.status==='OPEN'; }).length;
+        document.getElementById('cnt-prog').textContent     = data.filter(function(r){ return r.status==='IN_PROGRESS'; }).length;
+        document.getElementById('cnt-res').textContent      = data.filter(function(r){ return r.status==='RESOLVED'; }).length;
+        document.getElementById('sync-label').textContent   = new Date().toLocaleTimeString();
+        renderList();
+        if (selectedId) {
+          var r = allReports.find(function(r){ return String(r.id)===String(selectedId); });
+          if (r) renderDetail(r);
+        }
+      })
+      .catch(function(e){ console.error(e); });
   }
 
-  el.innerHTML = list.map(function(r) {
-    var active = String(r.id)===String(selectedId) ? ' active' : '';
-    var typeLabel = r.incidentType ? esc(r.incidentType).toUpperCase() : 'UNSPECIFIED';
-    var time = (r.time||'').slice(5,16);
-    return '<div class="inc-row' + active + '" onclick="selectReport(\'' + r.id + '\')">' +
-      '<div class="sev-stripe ' + esc(r.severity) + '"></div>' +
-      '<div class="inc-row-type">' + typeLabel + '</div>' +
-      '<div class="inc-row-title">' + esc(r.title || r.report) + '</div>' +
-      '<div class="inc-row-meta">' +
-        '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
-        '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
-        '<span class="inc-time">' + time + '</span>' +
-      '</div>' +
-    '</div>';
-  }).join('');
-}
+  // Filter Event Attachment
+  document.querySelectorAll('.ftab').forEach(function(tab) {
+    tab.onclick = function() {
+      activeFilter = tab.dataset.f;
+      document.querySelectorAll('.ftab').forEach(function(t){ t.classList.remove('active'); });
+      tab.classList.add('active');
+      renderList();
+    };
+  });
 
-// Select
-function selectReport(id) {
-  selectedId = id;
-  renderList();
-  var r = allReports.find(function(r){ return String(r.id)===String(id); });
-  if (r) renderDetail(r);
-}
+  ['stat-crit','stat-open','stat-prog','stat-res','stat-all'].forEach(function(id) {
+    var map = {'stat-crit':'critical','stat-open':'OPEN','stat-prog':'IN_PROGRESS','stat-res':'RESOLVED','stat-all':''};
+    document.getElementById(id).onclick = function() {
+      activeFilter = map[id];
+      document.querySelectorAll('.ftab').forEach(function(t){
+        t.classList.toggle('active', t.dataset.f === activeFilter);
+      });
+      renderList();
+    };
+  });
 
-// Render detail — mimics the "Create Report" form layout but read-only
-function renderDetail(r) {
-  var panel = document.getElementById('detail-panel');
+  document.getElementById('search-input').oninput = renderList;
 
-  var coords = formatCoords(r);
-  var locCode = r.locationCode || '';
-  var gridRef = r.gridRef || '';
+  function renderList() {
+    var search = (document.getElementById('search-input').value || '').toLowerCase();
+    var list = allReports.filter(function(r) {
+      if (activeFilter === 'critical' || activeFilter === 'medium' || activeFilter === 'low') {
+        if (r.severity !== activeFilter) return false;
+      } else if (activeFilter) {
+        if (r.status !== activeFilter) return false;
+      }
+      if (search) {
+        var hay = [(r.title||''),(r.report||''),(r.user||''),(r.incidentType||''),(r.sector||''),(r.locationCode||''),(r.nature||''),(r.tags||[]).join(' ')].join(' ').toLowerCase();
+        if (!hay.includes(search)) return false;
+      }
+      return true;
+    });
 
-  var statusBtns = '';
-  if (r.status !== 'IN_PROGRESS') statusBtns += '<button class="btn btn-prog" onclick="setStatus(\\\'' + r.id + '\\\',\\\'IN_PROGRESS\\\')">🔧 In Progress</button>';
-  if (r.status !== 'RESOLVED')    statusBtns += '<button class="btn btn-res"  onclick="setStatus(\\\'' + r.id + '\\\',\\\'RESOLVED\\\')">✅ Resolve</button>';
-  if (r.status !== 'OPEN')        statusBtns += '<button class="btn btn-open" onclick="setStatus(\\\'' + r.id + '\\\',\\\'OPEN\\\')">🆕 Reopen</button>';
+    document.getElementById('record-count').textContent = list.length + ' record' + (list.length!==1?'s':'');
 
-  var tags = (r.tags||[]).length
-    ? r.tags.map(function(t){ return '<span class="tag-chip">#'+esc(t)+'</span>'; }).join('')
-    : '<span style="color:var(--text-dim);font-size:12px;">No tags</span>';
+    var el = document.getElementById('inc-list');
+    if (!list.length) {
+      el.innerHTML = '<div style="padding:20px;color:var(--text-dim);font-size:13px;text-align:center;font-family:var(--font-mono);">NO RECORDS MATCH</div>';
+      return;
+    }
 
-  var comments = (r.comments||[]).length
-    ? r.comments.map(function(c) {
-        return '<div class="comment-row">' +
-          '<div class="c-avatar">' + initials(c.user) + '</div>' +
-          '<div class="c-body">' +
-            '<div class="c-meta"><span class="c-user">@'+esc(c.user)+'</span><span class="c-time">'+esc(c.time)+'</span></div>' +
-            '<div class="c-text">'+esc(c.message)+'</div>' +
-          '</div>' +
-        '</div>';
-      }).join('')
-    : '<div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">NO COMMENTS YET</div>';
-
-  function fv(val, mono) {
-    var cls = 'field-val' + (mono ? ' mono' : '') + (!val ? ' empty' : '');
-    return '<div class="' + cls + '">' + (val ? esc(val) : 'N/A') + '</div>';
-  }
-
-  panel.innerHTML =
-    // Header bar
-    '<div class="detail-topbar">' +
-      '<div class="detail-topbar-title">Incident Report</div>' +
-      '<div style="display:flex;align-items:center;gap:10px;">' +
-        '<div class="status-badges" style="margin-bottom:0;">' +
+    el.innerHTML = list.map(function(r) {
+      var active = String(r.id)===String(selectedId) ? ' active' : '';
+      var typeLabel = r.incidentType ? esc(r.incidentType).toUpperCase() : 'UNSPECIFIED';
+      var time = (r.time||'').slice(5,16);
+      return '<div class="inc-row' + active + '" onclick="selectReport(\'' + r.id + '\')">' +
+        '<div class="sev-stripe ' + esc(r.severity) + '"></div>' +
+        '<div class="inc-row-type">' + typeLabel + '</div>' +
+        '<div class="inc-row-title">' + esc(r.title || r.report) + '</div>' +
+        '<div class="inc-row-meta">' +
           '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
           '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
-          '<span class="badge src-badge">' + esc(r.source) + '</span>' +
+          '<span class="inc-time">' + time + '</span>' +
         '</div>' +
-        '<div class="detail-topbar-id">#' + r.id + '</div>' +
-      '</div>' +
-    '</div>' +
+      '</div>';
+    }).join('');
+  }
 
-    '<div class="detail-body">' +
-
-      // Card 1: Report Info
-      '<div class="field-card">' +
-        '<div class="field-card-title">Report Information</div>' +
-        '<div class="frow frow-2">' +
-          '<div class="field"><div class="field-label">Report Title</div>' + fv(r.title||r.report) + '</div>' +
-          '<div class="field"><div class="field-label">Report Type</div>' + fv(r.incidentType) + '</div>' +
-        '</div>' +
-        '<div class="frow frow-2">' +
-          '<div class="field"><div class="field-label">Report Date &amp; Time</div>' + fv(r.time, true) + '</div>' +
-          '<div class="field"><div class="field-label">Nature of Incident</div>' + fv(r.nature||r.incidentType) + '</div>' +
-        '</div>' +
-        '<div class="frow frow-2">' +
-          '<div class="field"><div class="field-label">Reported By</div>' + fv(r.user) + '</div>' +
-          '<div class="field"><div class="field-label">Severity</div>' + fv(r.severity ? r.severity.toUpperCase() : '') + '</div>' +
-        '</div>' +
-      '</div>' +
-
-      // Card 2: Location
-      '<div class="field-card">' +
-        '<div class="field-card-title">📍 Location</div>' +
-        '<div class="frow" style="grid-template-columns:1.2fr 1.2fr 0.7fr 2fr;">' +
-          '<div class="field"><div class="field-label">Lat Deg °</div>' + fv(r.latDeg, true) + '</div>' +
-          '<div class="field"><div class="field-label">Lat Min \'</div>' + fv(r.latMin, true) + '</div>' +
-          '<div class="field"><div class="field-label">Lat Dir</div>' + fv(r.latDir||'N', true) + '</div>' +
-          '<div class="field"><div class="field-label">Location Code</div>' + fv(locCode) + '</div>' +
-        '</div>' +
-        '<div class="frow" style="grid-template-columns:1.2fr 1.2fr 0.7fr 1.4fr 1fr;">' +
-          '<div class="field"><div class="field-label">Lon Deg °</div>' + fv(r.lonDeg, true) + '</div>' +
-          '<div class="field"><div class="field-label">Lon Min \'</div>' + fv(r.lonMin, true) + '</div>' +
-          '<div class="field"><div class="field-label">Lon Dir</div>' + fv(r.lonDir||'E', true) + '</div>' +
-          '<div class="field"><div class="field-label">Sector</div>' + fv(r.sector) + '</div>' +
-          '<div class="field"><div class="field-label">Grid Ref</div>' + fv(gridRef, true) + '</div>' +
-        '</div>' +
-      '</div>' +
-
-      // Card 3: Incident Details
-      '<div class="field-card">' +
-        '<div class="field-card-title">Details of Incident</div>' +
-        '<div class="field">' +
-          '<div class="field-label">Description</div>' +
-          '<div class="' + (r.description ? 'desc-val' : 'desc-val empty') + '">' + (r.description ? esc(r.description) : 'No details provided.') + '</div>' +
-        '</div>' +
-        '<div style="margin-top:12px;">' +
-          '<div class="field-label" style="margin-bottom:6px;">Tags</div>' +
-          '<div class="tags-wrap">' + tags + '</div>' +
-        '</div>' +
-      '</div>' +
-
-      // Card 4: Assignment & Actions
-      '<div class="field-card">' +
-        '<div class="field-card-title">Assignment &amp; Status</div>' +
-        '<div class="frow frow-3">' +
-          '<div class="field"><div class="field-label">Assignee</div>' + fv(r.assignee ? '@'+r.assignee : '') + '</div>' +
-          '<div class="field"><div class="field-label">Created</div>' + fv(r.time, true) + '</div>' +
-          '<div class="field"><div class="field-label">Last Updated</div>' + fv(r.updatedAt||r.time, true) + '</div>' +
-        '</div>' +
-        '<div style="margin-top:12px;"><div class="action-bar">' + statusBtns + '</div></div>' +
-      '</div>' +
-
-      // Card 5: Comments
-      '<div class="field-card">' +
-        '<div class="field-card-title">Comments (' + (r.comments||[]).length + ')</div>' +
-        '<div class="comment-thread">' + comments + '</div>' +
-      '</div>' +
-
-    '</div>' +
-
-    // Comment input bar
-    '<div class="comment-input-bar">' +
-      '<textarea class="comment-textarea" id="comment-input" placeholder="Add a comment..."></textarea>' +
-      '<button class="btn-send" id="send-btn">Send</button>' +
-    '</div>';
-
-  document.getElementById('send-btn').onclick = function() { addComment(r.id); };
-  document.getElementById('comment-input').onkeydown = function(e) {
-    if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); addComment(r.id); }
+  window.selectReport = function(id) {
+    selectedId = id;
+    renderList();
+    var r = allReports.find(function(r){ return String(r.id)===String(id); });
+    if (r) renderDetail(r);
   };
-}
 
-function setStatus(id, status) {
-  fetch('/api/reports/' + id + '/status', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({status: status, user: 'dashboard'})
-  }).then(loadReports);
-}
+  function renderDetail(r) {
+    var panel = document.getElementById('detail-panel');
+    var locCode = r.locationCode || '';
+    var gridRef = r.gridRef || '';
 
-function addComment(id) {
-  var input = document.getElementById('comment-input');
-  var message = input.value.trim();
-  if (!message) return;
-  fetch('/api/reports/' + id + '/comment', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({message: message, user: 'dashboard'})
-  }).then(function() {
-    input.value = '';
-    loadReports();
-  });
-}
+    // Fixed unescaped inline parameter strings using custom data-attributes instead
+    var statusBtns = '';
+    if (r.status !== 'IN_PROGRESS') statusBtns += '<button class="btn btn-prog status-action-btn" data-id="' + r.id + '" data-status="IN_PROGRESS">🔧 In Progress</button>';
+    if (r.status !== 'RESOLVED')    statusBtns += '<button class="btn btn-res status-action-btn" data-id="' + r.id + '" data-status="RESOLVED">✅ Resolve</button>';
+    if (r.status !== 'OPEN')        statusBtns += '<button class="btn btn-open status-action-btn" data-id="' + r.id + '" data-status="OPEN">🆕 Reopen</button>';
 
-function submitReport() {
-  var title       = document.getElementById('f-title').value.trim();
-  var incType     = document.getElementById('f-type').value.trim() || 'INCIDENT REPORT';
-  var nature      = document.getElementById('f-nature').value.trim();
-  var severity    = document.getElementById('f-severity').value;
-  var priority    = document.getElementById('f-priority').value;
-  var description = document.getElementById('f-description').value.trim();
-  var message     = document.getElementById('f-message').value.trim() || title;
-  var assignee    = document.getElementById('f-assignee').value.trim();
-  var sector      = document.getElementById('f-sector').value;
-  var latDeg      = document.getElementById('f-latdeg').value.trim();
-  var latMin      = document.getElementById('f-latmin').value.trim();
-  var latDir      = document.getElementById('f-latdir').value;
-  var lonDeg      = document.getElementById('f-londeg').value.trim();
-  var lonMin      = document.getElementById('f-lonmin').value.trim();
-  var lonDir      = document.getElementById('f-londir').value;
-  var locCode     = document.getElementById('f-loccode').value.trim();
-  var gridRef     = document.getElementById('f-gridref').value.trim();
-  var tags        = document.getElementById('f-tags').value.split(',').map(function(t){ return t.trim(); }).filter(Boolean);
+    var tags = (r.tags||[]).length
+      ? r.tags.map(function(t){ return '<span class="tag-chip">#'+esc(t)+'</span>'; }).join('')
+      : '<span style="color:var(--text-dim);font-size:12px;">No tags</span>';
 
-  if (!title) { alert('Report Title is required.'); return; }
-  if (!message) { alert('Short Report Summary is required.'); return; }
+    var comments = (r.comments||[]).length
+      ? r.comments.map(function(c) {
+          return '<div class="comment-row">' +
+            '<div class="c-avatar">' + initials(c.user) + '</div>' +
+            '<div class="c-body">' +
+              '<div class="c-meta"><span class="c-user">@'+esc(c.user)+'</span><span class="c-time">'+esc(c.time)+'</span></div>' +
+              '<div class="c-text">'+esc(c.message)+'</div>' +
+            '</div>' +
+          '</div>';
+        }).join('')
+      : '<div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">NO COMMENTS YET</div>';
 
-  fetch('/api/report', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({
-      title: title, incidentType: nature || incType,
-      severity: severity, priority: priority,
-      description: description, message: message,
-      assignee: assignee, sector: sector,
-      latDeg: latDeg, latMin: latMin, latDir: latDir,
-      lonDeg: lonDeg, lonMin: lonMin, lonDir: lonDir,
-      locationCode: locCode, gridRef: gridRef,
-      tags: tags, user: 'dashboard'
-    })
-  }).then(function(res){ return res.json(); })
-    .then(function(data) {
-      ['f-title','f-type','f-nature','f-reporter','f-description','f-message','f-assignee','f-latdeg','f-latmin','f-londeg','f-lonmin','f-loccode','f-gridref','f-tags'].forEach(function(id){
-        document.getElementById(id).value = '';
-      });
-      document.getElementById('f-severity').value = 'medium';
-      document.getElementById('f-priority').value = 'normal';
-      document.getElementById('f-latdir').value = 'N';
-      document.getElementById('f-londir').value = 'E';
-      document.getElementById('f-sector').value = '';
-      closeModal();
-      selectedId = data.report.id;
+    function fv(val, mono) {
+      var cls = 'field-val' + (mono ? ' mono' : '') + (!val ? ' empty' : '');
+      return '<div class="' + cls + '">' + (val ? esc(val) : 'N/A') + '</div>';
+    }
+
+    panel.innerHTML =
+      '<div class="detail-topbar">' +
+        '<div class="detail-topbar-title">Incident Report</div>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<div class="status-badges" style="margin-bottom:0;">' +
+            '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+            '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
+            '<span class="badge src-badge">' + esc(r.source) + '</span>' +
+          '</div>' +
+          '<div class="detail-topbar-id">#' + r.id + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="detail-body">' +
+        '<div class="field-card">' +
+          '<div class="field-card-title">Report Information</div>' +
+          '<div class="frow frow-2">' +
+            '<div class="field"><div class="field-label">Report Title</div>' + fv(r.title||r.report) + '</div>' +
+            '<div class="field"><div class="field-label">Report Type</div>' + fv(r.incidentType) + '</div>' +
+          '</div>' +
+          '<div class="frow frow-2">' +
+            '<div class="field"><div class="field-label">Report Date &amp; Time</div>' + fv(r.time, true) + '</div>' +
+            '<div class="field"><div class="field-label">Nature of Incident</div>' + fv(r.nature||r.incidentType) + '</div>' +
+          '</div>' +
+          '<div class="frow frow-2">' +
+            '<div class="field"><div class="field-label">Reported By</div>' + fv(r.user) + '</div>' +
+            '<div class="field"><div class="field-label">Severity</div>' + fv(r.severity ? r.severity.toUpperCase() : '') + '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="field-card">' +
+          '<div class="field-card-title">📍 Location</div>' +
+          '<div class="frow" style="grid-template-columns:1.2fr 1.2fr 0.7fr 2fr;">' +
+            '<div class="field"><div class="field-label">Lat Deg °</div>' + fv(r.latDeg, true) + '</div>' +
+            '<div class="field"><div class="field-label">Lat Min \'</div>' + fv(r.latMin, true) + '</div>' +
+            '<div class="field"><div class="field-label">Lat Dir</div>' + fv(r.latDir||'N', true) + '</div>' +
+            '<div class="field"><div class="field-label">Location Code</div>' + fv(locCode) + '</div>' +
+          '</div>' +
+          '<div class="frow" style="grid-template-columns:1.2fr 1.2fr 0.7fr 1.4fr 1fr;">' +
+            '<div class="field"><div class="field-label">Lon Deg °</div>' + fv(r.lonDeg, true) + '</div>' +
+            '<div class="field"><div class="field-label">Lon Min \'</div>' + fv(r.lonMin, true) + '</div>' +
+            '<div class="field"><div class="field-label">Lon Dir</div>' + fv(r.lonDir||'E', true) + '</div>' +
+            '<div class="field"><div class="field-label">Sector</div>' + fv(r.sector) + '</div>' +
+            '<div class="field"><div class="field-label">Grid Ref</div>' + fv(gridRef, true) + '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="field-card">' +
+          '<div class="field-card-title">Details of Incident</div>' +
+          '<div class="field">' +
+            '<div class="field-label">Description</div>' +
+            '<div class="' + (r.description ? 'desc-val' : 'desc-val empty') + '">' + (r.description ? esc(r.description) : 'No details provided.') + '</div>' +
+          '</div>' +
+          '<div style="margin-top:12px;">' +
+            '<div class="field-label" style="margin-bottom:6px;">Tags</div>' +
+            '<div class="tags-wrap">' + tags + '</div>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="field-card">' +
+          '<div class="field-card-title">Assignment &amp; Status</div>' +
+          '<div class="frow frow-3">' +
+            '<div class="field"><div class="field-label">Assignee</div>' + fv(r.assignee ? '@'+r.assignee : '') + '</div>' +
+            '<div class="field"><div class="field-label">Created</div>' + fv(r.time, true) + '</div>' +
+            '<div class="field"><div class="field-label">Last Updated</div>' + fv(r.updatedAt||r.time, true) + '</div>' +
+          '</div>' +
+          '<div style="margin-top:12px;"><div class="action-bar">' + statusBtns + '</div></div>' +
+        '</div>' +
+
+        '<div class="field-card">' +
+          '<div class="field-card-title">Comments (' + (r.comments||[]).length + ')</div>' +
+          '<div class="comment-thread">' + comments + '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="comment-input-bar">' +
+        '<textarea class="comment-textarea" id="comment-input" data-id="' + r.id + '" placeholder="Add a comment..."></textarea>' +
+        '<button class="btn-send" id="send-btn" data-id="' + r.id + '">Send</button>' +
+      '</div>';
+  }
+
+  function setStatus(id, status) {
+    fetch('/api/reports/' + id + '/status', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({status: status, user: 'dashboard'})
+    }).then(loadReports);
+  }
+
+  function addComment(id) {
+    var input = document.getElementById('comment-input');
+    if (!input) return;
+    var message = input.value.trim();
+    if (!message) return;
+    fetch('/api/reports/' + id + '/comment', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({message: message, user: 'dashboard'})
+    }).then(function() {
+      input.value = '';
       loadReports();
     });
-}
+  }
 
-loadReports();
-setInterval(loadReports, 3000);
-}); // end DOMContentLoaded
+  function submitReport() {
+    var title       = document.getElementById('f-title').value.trim();
+    var incType      = document.getElementById('f-type').value.trim() || 'INCIDENT REPORT';
+    var nature      = document.getElementById('f-nature').value.trim();
+    var severity    = document.getElementById('f-severity').value;
+    var priority    = document.getElementById('f-priority').value;
+    var description = document.getElementById('f-description').value.trim();
+    var message     = document.getElementById('f-message').value.trim() || title;
+    var assignee    = document.getElementById('f-assignee').value.trim();
+    var sector      = document.getElementById('f-sector').value;
+    var latDeg      = document.getElementById('f-latdeg').value.trim();
+    var latMin      = document.getElementById('f-latmin').value.trim();
+    var latDir      = document.getElementById('f-latdir').value;
+    var lonDeg      = document.getElementById('f-londeg').value.trim();
+    var lonMin      = document.getElementById('f-lonmin').value.trim();
+    var lonDir      = document.getElementById('f-londir').value;
+    var locCode     = document.getElementById('f-loccode').value.trim();
+    var gridRef     = document.getElementById('f-gridref').value.trim();
+    var tags        = document.getElementById('f-tags').value.split(',').map(function(t){ return t.trim(); }).filter(Boolean);
+
+    if (!title) { alert('Report Title is required.'); return; }
+    if (!message) { alert('Short Report Summary is required.'); return; }
+
+    fetch('/api/report', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        title: title, incidentType: nature || incType,
+        severity: severity, priority: priority,
+        description: description, message: message,
+        assignee: assignee, sector: sector,
+        latDeg: latDeg, latMin: latMin, latDir: latDir,
+        lonDeg: lonDeg, lonMin: lonMin, lonDir: lonDir,
+        locationCode: locCode, gridRef: gridRef,
+        tags: tags, user: 'dashboard'
+      })
+    }).then(function(res){ return res.json(); })
+      .then(function(data) {
+        ['f-title','f-type','f-nature','f-reporter','f-description','f-message','f-assignee','f-latdeg','f-latmin','f-londeg','f-lonmin','f-loccode','f-gridref','f-tags'].forEach(function(id){
+          var targetField = document.getElementById(id);
+          if (targetField) targetField.value = '';
+        });
+        document.getElementById('f-severity').value = 'medium';
+        document.getElementById('f-priority').value = 'normal';
+        document.getElementById('f-latdir').value = 'N';
+        document.getElementById('f-londir').value = 'E';
+        document.getElementById('f-sector').value = '';
+        closeModal();
+        selectedId = data.report.id;
+        loadReports();
+      });
+  }
+
+  loadReports();
+  setInterval(loadReports, 3000);
+});
 </script>
 </body>
 </html>`);
