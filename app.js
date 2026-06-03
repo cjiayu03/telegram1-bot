@@ -1098,7 +1098,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
   </div>
   <div class="topbar-right">
     <div class="live-clock" id="live-clock">—</div>
-    <button class="btn-new" id="new-btn" type="button" onclick="window.openCreateReportModal && window.openCreateReportModal(event)">+ Create Report</button>
+    <button class="btn-new" id="new-btn" type="button">+ Create Report</button>
   </div>
 </div>
 
@@ -1352,24 +1352,21 @@ document.addEventListener('DOMContentLoaded', function() {
       dateInput.value = new Date().toISOString().slice(0, 16);
     }
 
-    if (overlay.classList) overlay.classList.add('is-open');
-    overlay.style.display = 'flex';
+    overlay.classList.add('is-open');
     overlay.setAttribute('aria-hidden', 'false');
 
-    (window.requestAnimationFrame || window.setTimeout)(function() {
+    window.requestAnimationFrame(function() {
       var titleField = document.getElementById('f-title');
       if (titleField) titleField.focus();
-    }, 0);
+    });
   }
 
   function closeModal() {
     if (!overlay) return;
-    if (overlay.classList) overlay.classList.remove('is-open');
-    overlay.style.display = 'none';
+    overlay.classList.remove('is-open');
     overlay.setAttribute('aria-hidden', 'true');
   }
 
-  window.openCreateReportModal = openModal;
   if (newBtn) newBtn.addEventListener('click', openModal);
   if (document.getElementById('cancel-btn')) document.getElementById('cancel-btn').addEventListener('click', closeModal);
   if (document.getElementById('modal-close')) document.getElementById('modal-close').addEventListener('click', closeModal);
