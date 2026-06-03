@@ -1434,47 +1434,91 @@ document.addEventListener('DOMContentLoaded', function() {
   if (searchField) searchField.oninput = renderList;
 
   function renderList() {
-    var searchInput = document.getElementById('search-input');
-    var search = (searchInput ? searchInput.value : '').toLowerCase();
-    
-    var list = allReports.filter(function(r) {
-      if (activeFilter === 'critical' || activeFilter === 'medium' || activeFilter === 'low') {
-        if (r.severity !== activeFilter) return false;
-      } else if (activeFilter) {
-        if (r.status !== activeFilter) return false;
-      }
-      if (search) {
-        var hay = [(r.title||''),(r.report||''),(r.user||''),(r.incidentType||''),(r.sector||''),(r.locationCode||''),(r.nature||''),(r.tags||[]).join(' ')].join(' ').toLowerCase();
-        if (!hay.includes(search)) return false;
-      }
-      return true;
-    });
+  var searchInput = document.getElementById('search-input');
+  var search = (searchInput ? searchInput.value : '').toLowerCase();
 
-    document.getElementById('record-count').textContent = list.length + ' record' + (list.length!==1?'s':'');
-
-    var el = document.getElementById('inc-list');
-    if (!el) return;
-    if (!list.length) {
-      el.innerHTML = '<div style="padding:20px;color:var(--text-dim);font-size:13px;text-align:center;font-family:var(--font-mono);">NO RECORDS MATCH</div>';
-      return;
+  var list = allReports.filter(function(r) {
+    if (
+      activeFilter === 'critical' ||
+      activeFilter === 'medium' ||
+      activeFilter === 'low'
+    ) {
+      if (r.severity !== activeFilter) return false;
+    } else if (activeFilter) {
+      if (r.status !== activeFilter) return false;
     }
 
-    el.innerHTML = list.map(function(r) {
-      var active = String(r.id)===String(selectedId) ? ' active' : '';
-      var typeLabel = r.incidentType ? esc(r.incidentType).toUpperCase() : 'UNSPECIFIED';
-      var time = (r.time||'').slice(5,16);
-      return '<div class="inc-row' + active + '" onclick="selectReport(\'' + r.id + '\')">' +
-        '<div class="sev-stripe ' + esc(r.severity) + '"></div>' +
-        '<div class="inc-row-type">' + typeLabel + '</div>' +
-        '<div class="inc-row-title">' + esc(r.title || r.report) + '</div>' +
-        '<div class="inc-row-meta">' +
-          '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
-          '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
-          '<span class="inc-time">' + time + '</span>' +
-        '</div>' +
-      '</div>';
-    }).join('');
+    if (search) {
+      var hay = [
+        (r.title || ''),
+        (r.report || ''),
+        (r.user || ''),
+        (r.incidentType || ''),
+        (r.sector || ''),
+        (r.locationCode || ''),
+        (r.nature || ''),
+        (r.tags || []).join(' ')
+      ].join(' ').toLowerCase();
+
+      if (!hay.includes(search)) return false;
+    }
+
+    return true;
+  });
+
+  document.getElementById('record-count').textContent =
+    list.length + ' record' + (list.length !== 1 ? 's' : '');
+
+  var el = document.getElementById('inc-list');
+  if (!el) return;
+
+  if (!list.length) {
+    el.innerHTML =
+      '<div style="padding:20px;color:var(--text-dim);font-size:13px;text-align:center;font-family:var(--font-mono);">NO RECORDS MATCH</div>';
+    return;
   }
+
+  el.innerHTML = list.map(function(r) {
+    var active =
+      String(r.id) === String(selectedId)
+        ? ' active'
+        : '';
+
+    var typeLabel = r.incidentType
+      ? esc(r.incidentType).toUpperCase()
+      : 'UNSPECIFIED';
+
+    var time = (r.time || '').slice(5, 16);
+
+    return `
+      <div class="inc-row${active}" onclick="selectReport('${r.id}')">
+        <div class="sev-stripe ${esc(r.severity)}"></div>
+
+        <div class="inc-row-type">
+          ${typeLabel}
+        </div>
+
+        <div class="inc-row-title">
+          ${esc(r.title || r.report)}
+        </div>
+
+        <div class="inc-row-meta">
+          <span class="badge sev-${esc(r.severity)}">
+            ${esc(r.severity)}
+          </span>
+
+          <span class="badge st-${esc(r.status)}">
+            ${r.status.replace('_', ' ')}
+          </span>
+
+          <span class="inc-time">
+            ${time}
+          </span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
   window.selectReport = function(id) {
     selectedId = id;
