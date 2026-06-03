@@ -949,13 +949,13 @@ body {
   display: none;
 }
 #modal-overlay.open {
-  display: flex;
+  display: flex !important; /* Force layout display switch */
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,.82);
   align-items: flex-start;
   justify-content: center;
-  z-index: 9999;
+  z-index: 99999; /* Boosted stacking layer prioritization */
   padding: 30px 20px;
   overflow-y: auto;
 }
@@ -1365,10 +1365,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var now = new Date();
     var iso = now.toISOString().slice(0,16);
     document.getElementById('f-datetime').value = iso;
+    
+    // Direct display overrides to ensure rendering engines wake up
+    var overlay = document.getElementById('modal-overlay');
+    overlay.style.display = 'flex';
     overlay.classList.add('open');
+    
     document.getElementById('f-title').focus();
   };
-  function closeModal() { overlay.classList.remove('open'); }
+  function closeModal() { 
+    var overlay = document.getElementById('modal-overlay');
+    overlay.style.display = 'none';
+    overlay.classList.remove('open'); 
+  }
   document.getElementById('cancel-btn').onclick = closeModal;
   document.getElementById('modal-close').onclick = closeModal;
   overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
