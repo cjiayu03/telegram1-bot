@@ -1631,7 +1631,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function submitReport() {
     var title       = document.getElementById('f-title').value.trim();
-    var incType      = document.getElementById('f-type').value.trim() || 'INCIDENT REPORT';
+    var incType     = document.getElementById('f-type').value.trim() || 'INCIDENT REPORT';
     var nature      = document.getElementById('f-nature').value.trim();
     var severity    = document.getElementById('f-severity').value;
     var priority    = document.getElementById('f-priority').value;
@@ -1665,21 +1665,38 @@ document.addEventListener('DOMContentLoaded', function() {
         locationCode: locCode, gridRef: gridRef,
         tags: tags, user: 'dashboard'
       })
-    }).then(function(res){ return res.json(); })
-      .then(function(data) {
-        ['f-title','f-type','f-nature','f-reporter','f-description','f-message','f-assignee','f-latdeg','f-latmin','f-londeg','f-lonmin','f-loccode','f-gridref','f-tags'].forEach(function(id){
-          var targetField = document.getElementById(id);
-          if (targetField) targetField.value = '';
-        });
-        document.getElementById('f-severity').value = 'medium';
-        document.getElementById('f-priority').value = 'normal';
-        document.getElementById('f-latdir').value = 'N';
-        document.getElementById('f-londir').value = 'E';
-        document.getElementById('f-sector').value = '';
-        closeModal();
-        selectedId = data.report.id;
-        loadReports();
+    })
+    .then(function(res) { 
+      if (!res.ok) throw new Error('Network response was not ok');
+      return res.json(); 
+    })
+    .then(function(data) {
+      // Safe cleanup array: clears fields only if they actually exist in the DOM
+      var fieldsToClear = ['f-title','f-type','f-nature','f-reporter','f-description','f-message','f-assignee','f-latdeg','f-latmin','f-londeg','f-lonmin','f-loccode','f-gridref','f-tags'];
+      fieldsToClear.forEach(function(id) {
+        var targetField = document.getElementById(id);
+        if (targetField) targetField.value = '';
       });
+
+      // Reset dropdown selectors safely
+      if (document.getElementById('f-severity')) document.getElementById('f-severity').value = 'medium';
+      if (document.getElementById('f-priority')) document.getElementById('f-priority').value = 'normal';
+      if (document.getElementById('f-latdir'))  document.getElementById('f-latdir').value = 'N';
+      if (document.getElementById('f-londir'))  document.getElementById('f-londir').value = 'E';
+      if (document.getElementById('f-sector'))  document.getElementById('f-sector').value = '';
+      
+      closeModal();
+
+      // Set the active selected panel to the new item and force refresh
+      if (data && data.report && data.report.id) {
+        selectedId = data.report.id;
+      }
+      loadReports();
+    })
+    .catch(function(err) {
+      console.error('Submission failed:', err);
+      alert('Failed to save report. Check your server terminal console log.');
+    });
   }
 
   loadReports();
