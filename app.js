@@ -932,7 +932,7 @@ body {
 
 /* ── CREATE MODAL FIXED VIEWPORT CONFIG ── */
 #modal-overlay {
-  display: none; /* Controlled explicitly via functional JS toggling now */
+  display: none; /* Hidden until the create-report button toggles .is-open */
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.85);
@@ -942,6 +942,7 @@ body {
   padding: 40px 20px;
   overflow-y: auto;
 }
+#modal-overlay.is-open { display: flex; }
 
 .modal-box {
   background: var(--surface);
@@ -1097,7 +1098,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
   </div>
   <div class="topbar-right">
     <div class="live-clock" id="live-clock">—</div>
-    <button class="btn-new" id="new-btn">+ Create Report</button>
+    <button class="btn-new" id="new-btn" type="button" onclick="window.openCreateReportModal && window.openCreateReportModal(event)">+ Create Report</button>
   </div>
 </div>
 
@@ -1162,7 +1163,7 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
   <div class="modal-box">
     <div class="modal-header">
       <div class="modal-title">Create Report</div>
-      <button class="modal-close" id="modal-close">✕</button>
+      <button class="modal-close" id="modal-close" type="button" aria-label="Close create report dialog">✕</button>
     </div>
     <div class="modal-body">
       <div class="m-row-2">
@@ -1295,8 +1296,8 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn-cancel" id="cancel-btn">Cancel</button>
-      <button class="btn-create" id="submit-btn">Create Report</button>
+      <button class="btn-cancel" id="cancel-btn" type="button">Cancel</button>
+      <button class="btn-create" id="submit-btn" type="button">Create Report</button>
     </div>
   </div>
 </div>
@@ -1320,6 +1321,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if (lat && lon) return lat + ' / ' + lon;
     return lat || lon;
   }
+  function findClosest(el, selector) {
+    while (el && el !== document) {
+      if (el.matches && el.matches(selector)) return el;
+      el = el.parentNode;
+    }
+    return null;
+  }
 
   // Live Clock setup
   function updateClock() {
@@ -1332,34 +1340,43 @@ document.addEventListener('DOMContentLoaded', function() {
   updateClock();
   setInterval(updateClock, 1000);
 
-  // --- SAFE MODAL ANIMATION HANDLERS ---
+  // --- CREATE REPORT MODAL HANDLERS ---
   var overlay = document.getElementById('modal-overlay');
   var newBtn = document.getElementById('new-btn');
-  
-  if (newBtn && overlay) {
-    newBtn.onclick = function() {
-      var now = new Date();
-      var iso = now.toISOString().slice(0,16);
-      var dateInput = document.getElementById('f-datetime');
-      if (dateInput) dateInput.value = iso;
-      
-      // Explicit style activation to handle rendering layers
-      overlay.style.setProperty('display', 'flex', 'important');
-      
+
+  function openModal() {
+    if (!overlay) return;
+
+    var dateInput = document.getElementById('f-datetime');
+    if (dateInput && !dateInput.value) {
+      dateInput.value = new Date().toISOString().slice(0, 16);
+    }
+
+    if (overlay.classList) overlay.classList.add('is-open');
+    overlay.style.display = 'flex';
+    overlay.setAttribute('aria-hidden', 'false');
+
+    (window.requestAnimationFrame || window.setTimeout)(function() {
       var titleField = document.getElementById('f-title');
       if (titleField) titleField.focus();
-    };
+    }, 0);
   }
 
-  function closeModal() { 
-    if (overlay) overlay.style.display = 'none'; 
+  function closeModal() {
+    if (!overlay) return;
+    if (overlay.classList) overlay.classList.remove('is-open');
+    overlay.style.display = 'none';
+    overlay.setAttribute('aria-hidden', 'true');
   }
-  
-  if (document.getElementById('cancel-btn')) document.getElementById('cancel-btn').onclick = closeModal;
-  if (document.getElementById('modal-close')) document.getElementById('modal-close').onclick = closeModal;
-  
+
+  window.openCreateReportModal = openModal;
+  if (newBtn) newBtn.addEventListener('click', openModal);
+  if (document.getElementById('cancel-btn')) document.getElementById('cancel-btn').addEventListener('click', closeModal);
+  if (document.getElementById('modal-close')) document.getElementById('modal-close').addEventListener('click', closeModal);
+
   if (overlay) {
-    overlay.onclick = function(e) { if (e.target === overlay) closeModal(); };
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
   }
   document.addEventListener('keydown', function(e) { if (e.key==='Escape') closeModal(); });
   
@@ -1368,19 +1385,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Global action delegations 
   document.body.addEventListener('click', function(e) {
-    var targetStatusBtn = e.target.closest('.status-action-btn');
+    var targetStatusBtn = findClosest(e.target, '.status-action-btn');
     if (targetStatusBtn) {
       setStatus(targetStatusBtn.dataset.id, targetStatusBtn.dataset.status);
       return;
     }
-    var targetSendBtn = e.target.closest('#send-btn');
+    var targetSendBtn = findClosest(e.target, '#send-btn');
     if (targetSendBtn) {
       addComment(targetSendBtn.dataset.id);
     }
   });
 
   document.body.addEventListener('keydown', function(e) {
-    var targetCommentInput = e.target.closest('#comment-input');
+    var targetCommentInput = findClosest(e.target, '#comment-input');
     if (targetCommentInput && e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       addComment(targetCommentInput.dataset.id);
@@ -1460,7 +1477,7 @@ document.addEventListener('DOMContentLoaded', function() {
         (r.tags || []).join(' ')
       ].join(' ').toLowerCase();
 
-      if (!hay.includes(search)) return false;
+      if (hay.indexOf(search) === -1) return false;
     }
 
     return true;
@@ -1490,33 +1507,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var time = (r.time || '').slice(5, 16);
 
-    return \`
-      <div class="inc-row\${active}" onclick="selectReport('\${r.id}')">
-        <div class="sev-stripe \${esc(r.severity)}"></div>
-
-        <div class="inc-row-type">
-          \${typeLabel}
-        </div>
-
-        <div class="inc-row-title">
-          \${esc(r.title || r.report)}
-        </div>
-
-        <div class="inc-row-meta">
-          <span class="badge sev-\${esc(r.severity)}">
-            \${esc(r.severity)}
-          </span>
-
-          <span class="badge st-\${esc(r.status)}">
-            \${r.status.replace('_', ' ')}
-          </span>
-
-          <span class="inc-time">
-            \${time}
-          </span>
-        </div>
-      </div>
-    \`;
+    return '' +
+      '<div class="inc-row' + active + '" onclick="selectReport(\'' + esc(r.id) + '\')">' +
+        '<div class="sev-stripe ' + esc(r.severity) + '"></div>' +
+        '<div class="inc-row-type">' + typeLabel + '</div>' +
+        '<div class="inc-row-title">' + esc(r.title || r.report) + '</div>' +
+        '<div class="inc-row-meta">' +
+          '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+          '<span class="badge st-' + esc(r.status) + '">' + String(r.status || '').replace('_', ' ') + '</span>' +
+          '<span class="inc-time">' + time + '</span>' +
+        '</div>' +
+      '</div>';
   }).join('');
 }
 
@@ -1670,7 +1671,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var severity = document.getElementById('f-severity') ? document.getElementById('f-severity').value : 'medium';
     var priority = document.getElementById('f-priority') ? document.getElementById('f-priority').value : 'normal';
     var description = document.getElementById('f-description') ? document.getElementById('f-description').value.trim() : '';
-    var message = document.getElementById('f-message') ? document.getElementById('f-message').value.trim() : title;
+    var summary = document.getElementById('f-message') ? document.getElementById('f-message').value.trim() : '';
+    var message = summary || description || title;
     var assignee = document.getElementById('f-assignee') ? document.getElementById('f-assignee').value.trim() : '';
     var sector = document.getElementById('f-sector') ? document.getElementById('f-sector').value : '';
     var latDeg = document.getElementById('f-latdeg') ? document.getElementById('f-latdeg').value.trim() : '';
@@ -1685,6 +1687,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var tags = tagInput ? tagInput.value.split(',').map(function(t){ return t.trim(); }).filter(Boolean) : [];
 
     if (!title) { alert('Report Title is required.'); return; }
+    if (!message) { alert('Short Report Summary or Details of Incident is required.'); return; }
 
     fetch('/api/report', {
       method: 'POST',
@@ -1700,7 +1703,12 @@ document.addEventListener('DOMContentLoaded', function() {
         tags: tags, user: 'dashboard'
       })
     })
-    .then(function(res) { return res.json(); })
+    .then(function(res) {
+      return res.json().then(function(data) {
+        if (!res.ok) throw new Error(data && data.error ? data.error : 'Report submission failed');
+        return data;
+      });
+    })
     .then(function(data) {
       var fieldsToClear = ['f-title','f-type','f-nature','f-reporter','f-description','f-message','f-assignee','f-latdeg','f-latmin','f-londeg','f-lonmin','f-loccode','f-gridref','f-tags'];
       fieldsToClear.forEach(function(id) {
@@ -1711,7 +1719,10 @@ document.addEventListener('DOMContentLoaded', function() {
       if (data && data.report) selectedId = data.report.id;
       loadReports();
     })
-    .catch(function(err) { console.error('Submission broken', err); });
+    .catch(function(err) {
+      console.error('Submission broken', err);
+      alert(err && err.message ? err.message : 'Report submission failed.');
+    });
   }
 
   loadReports();
