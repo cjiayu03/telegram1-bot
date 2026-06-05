@@ -81,7 +81,7 @@ bot.on('callback_query', async (query) => {
     try {
       await bot.editMessageText(
         (query.message.text || '').replace(/Status:.+/g, '') +
-        `\nStatus: ${statusEmoji(newStatus)} ${newStatus}`,
+        `\nStatus: ${statusEmoji(newStatus)} *${newStatus}*`,
         {
           chat_id: chatId,
           message_id: msgId,
@@ -94,7 +94,7 @@ bot.on('callback_query', async (query) => {
     bot.answerCallbackQuery(query.id);
     bot.sendMessage(
       GROUP_CHAT_ID,
-      `${statusEmoji(newStatus)} Status Update\n\nIncident ${incidentId} → ${newStatus} by @${user}`,
+      `${statusEmoji(newStatus)} *Status Update*\n\nIncident \`${incidentId}\` → *${newStatus}*`,
       { parse_mode: 'Markdown' }
     );
     return;
@@ -112,7 +112,7 @@ bot.on('message', async (msg) => {
   const user   = msg.from.username || msg.from.first_name;
 
   if (pendingReply[userId] && !text.startsWith('/')) {
-    const { incidentId, promptMsgId, originMsgId } = pendingReply[userId];
+    const { incidentId, promptMsgId } = pendingReply[userId];
     delete pendingReply[userId];
 
     const report = reports.find(r => String(r.id) === String(incidentId));
@@ -203,6 +203,7 @@ const DASHBOARD_HTML = `
 <head>
 <meta charset="UTF-8">
 <title>Incident Command</title>
+
 <style>
 body{margin:0;font-family:Arial;background:#0b0f14;color:#fff}
 .header{padding:12px 20px;background:#111827}
@@ -217,6 +218,7 @@ body{margin:0;font-family:Arial;background:#0b0f14;color:#fff}
 .label{font-size:11px;color:#9ca3af;margin-top:12px}
 .box{background:#111827;padding:10px;border-radius:6px;margin-top:4px}
 </style>
+
 </head>
 
 <body>
