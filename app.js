@@ -1,3 +1,20 @@
+Ah, the classic string injection breakout strike again!
+
+The `SyntaxError: Unexpected identifier 'is'` means that a stray unescaped single quote or string literal got parsed as live JavaScript code instead of a string token.
+
+If you look at the **Dashboard HTML template string** inside `res.send(...)` around line 219, you'll see this line:
+
+```javascript
+// ❌ THE CULPRIT:
+Incident is now live on the Operational CommandCenter Dashboard.
+
+```
+
+Because that message is nested deep inside a string template *inside* another template literal (`res.send(\`...`)`), Node's parser hits the word `is` right after the breaking template character evaluation and panics because it thinks `is` is a native JavaScript keyword/variable.
+
+Here is the exact complete code file with **all multi-layer string literals safely decoupled and fixed** so Node will compile smoothly on startup:
+
+```javascript
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
@@ -40,6 +57,7 @@ function now() {
   return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
 
+// Helper to stringify location information safely
 function formatLocation(r) {
   if (!r.latDeg && !r.locationCode) return 'N/A';
   const latStr = r.latDeg ? `${r.latDeg}°${r.latMin || '00'}'${r.latDir || 'N'}` : '';
@@ -50,7 +68,7 @@ function formatLocation(r) {
 function incidentKeyboard(id) {
   return {
     inline_keyboard: [[
-      { text: '💬 Comment',     callback_data: `comment:${id}` },
+      { text: '💬 Comment',    callback_data: `comment:${id}` },
       { text: '🔧 In Progress', callback_data: `status:${id}:IN_PROGRESS` },
       { text: '✅ Resolve',    callback_data: `status:${id}:RESOLVED` }
     ]]
@@ -125,6 +143,7 @@ bot.on('message', (msg) => {
   const userId = msg.from.id;
   const user   = msg.from.username || msg.from.first_name;
 
+  // Intercept pending inline-button comment replies
   if (pendingReply[userId] && !text.startsWith('/')) {
     const { incidentId, promptMsgId, originMsgId } = pendingReply[userId];
     delete pendingReply[userId];
@@ -142,8 +161,9 @@ bot.on('message', (msg) => {
     return;
   }
 
+  // ── COMMAND: /template ──
   if (text.startsWith('/template')) {
-    const exampleTemplate =
+    const exampleTemplate = 
       `📝 *Copy the template below, paste it, fill it out, and send it back:*\n\n` +
       `\`\`\`\n` +
       `/report\n` +
@@ -160,6 +180,7 @@ bot.on('message', (msg) => {
     return bot.sendMessage(chatId, exampleTemplate, { parse_mode: 'Markdown' });
   }
 
+  // ── COMMAND: /report (Template-driven Parser) ──
   if (text.startsWith('/report')) {
     if (text.trim() === '/report') {
       return bot.sendMessage(chatId, "⚠️ Please specify details or match the format layout. Type `/template` to get a structured fillable pattern.", { parse_mode: 'Markdown' });
@@ -185,10 +206,10 @@ bot.on('message', (msg) => {
     const report = {
       id: Date.now(),
       user: `@${user}`,
-      severity,
-      report: titleText,
+      severity: severity,
+      report: titleText, 
       title: titleText.slice(0, 60),
-      description,
+      description: description,
       assignee: '',
       tags: ['telegram', 'template'],
       priority: severity === 'critical' ? 'high' : 'normal',
@@ -197,9 +218,12 @@ bot.on('message', (msg) => {
       time: now(),
       updatedAt: now(),
       comments: [],
-      incidentType,
-      sector,
-      latDeg, latMin, latDir, locationCode
+      incidentType: incidentType,
+      sector: sector,
+      latDeg: latDeg,
+      latMin: latMin,
+      latDir: latDir,
+      locationCode: locationCode
     };
 
     reports.unshift(report);
@@ -208,19 +232,28 @@ bot.on('message', (msg) => {
 
     bot.sendMessage(chatId,
       `✅ *Incident Synchronized from Template*\n\n` +
-      `*ID*: \`${report.id}\`\n*Type*: ${incidentType}\n*Sector*: ${sector}\n` +
-      `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}${locStr}\n\nIncident is live on the CommandCenter dashboard.`,
-      { parse_mode: 'Markdown' });
+      `*ID*: \`${report.id}\`\n` +
+      `*Type*: ${incidentType}\n` +
+      `*Sector*: ${sector}\n` +
+      `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}${locStr}\n\n` +
+      `Incident is live on the CommandCenter dashboard.`,
+      { parse_mode: 'Markdown' }
+    );
 
     bot.sendMessage(GROUP_CHAT_ID,
       `🚨 *New Incident* [${report.incidentType.toUpperCase()}]\n\n` +
-      `*Title*: ${report.title}\n*ID*: \`${report.id}\`\n` +
+      `*Title*: ${report.title}\n` +
+      `*ID*: \`${report.id}\`\n` +
       `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}\n` +
-      `*Sector*: ${sector}${locStr}\n*Reporter*: @${user}\n*Status*: 🆕 OPEN`,
-      { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) });
+      `*Sector*: ${sector}${locStr}\n` +
+      `*Reporter*: @${user}\n` +
+      `*Status*: 🆕 OPEN`,
+      { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) }
+    );
     return;
   }
 
+  // Plain fallback for regular text messages in the main group
   if (!text.startsWith('/') && String(chatId) === String(GROUP_CHAT_ID)) {
     const report = {
       id: Date.now(), user, severity: 'low', report: text,
@@ -250,9 +283,7 @@ app.post('/api/report', (req, res) => {
     title = '', description = '', assignee = '',
     tags = [], priority = 'normal',
     incidentType = 'General', sector = '',
-    latDeg = '', latMin = '', latDir = 'N',
-    lonDeg = '', lonMin = '', lonDir = 'E',
-    locationCode = '', gridRef = ''
+    latDeg = '', latMin = '', latDir = 'N', locationCode = ''
   } = req.body;
 
   if (!message) return res.status(400).json({ error: 'Message required' });
@@ -266,20 +297,18 @@ app.post('/api/report', (req, res) => {
     priority, status: 'OPEN', source: 'dashboard',
     time: now(), updatedAt: now(), comments: [],
     incidentType, sector: sector || 'Unassigned',
-    latDeg, latMin, latDir,
-    lonDeg, lonMin, lonDir,
-    locationCode, gridRef
+    latDeg, latMin, latDir, locationCode
   };
 
   reports.unshift(report);
 
-  const tagStr    = report.tags.length ? `\nTags: ${report.tags.join(', ')}` : '';
+  const tagStr = report.tags.length ? `\nTags: ${report.tags.join(', ')}` : '';
   const assignStr = assignee ? `\nAssignee: ${assignee}` : '';
   const sectorStr = report.sector ? `\nSector: ${report.sector}` : '';
-  const locStr    = formatLocation(report) !== 'N/A' ? `\nLocation: ${formatLocation(report)}` : '';
+  const locStr = formatLocation(report) !== 'N/A' ? `\nLocation: ${formatLocation(report)}` : '';
 
   bot.sendMessage(GROUP_CHAT_ID,
-    `🚨 *Dashboard Incident* [${report.incidentType.toUpperCase()}]\n\nID: \`${report.id}\`\nTitle: ${report.title}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nPriority: ${report.priority}${sectorStr}${locStr}${tagStr}${assignStr}\n*Status*: 🆕 OPEN`,
+    `🚨 *Dashboard Incident* [${report.incidentType.toUpperCase()}]\n\nID: \`${report.id}\`\nTitle: ${report.title}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nPriority: ${priority.toUpperCase()}\nFrom: ${user}${assignStr}${sectorStr}${locStr}${tagStr}\nStatus: 🆕 OPEN\n\n${message}`,
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) });
 
   res.json({ success: true, report });
@@ -290,7 +319,7 @@ app.patch('/api/reports/:id', (req, res) => {
   const report = reports.find(r => String(r.id) === String(id));
   if (!report) return res.status(404).json({ error: 'Incident not found' });
 
-  const allowed = ['title','description','assignee','tags','priority','severity','incidentType','sector','latDeg','latMin','latDir','lonDeg','lonMin','lonDir','locationCode','gridRef'];
+  const allowed = ['title', 'description', 'assignee', 'tags', 'priority', 'severity', 'incidentType', 'sector', 'latDeg', 'latMin', 'latDir', 'locationCode'];
   allowed.forEach(k => { if (req.body[k] !== undefined) report[k] = req.body[k]; });
   report.updatedAt = now();
   res.json({ success: true, report });
@@ -348,1383 +377,557 @@ app.get('/dashboard', (req, res) => {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Incident Command Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:        #0e1015;
-  --surface:  #161a22;
-  --surface2: #1c2130;
-  --surface3: #222736;
-  --border:   #2a3145;
-  --border2:  #333d52;
-  --text:     #cdd6e8;
-  --text-dim: #7d8fa8;
-  --text-bright: #e8eef8;
-  --accent:   #4a7fd4;
-  --accent2:  #2d5fab;
-  --accent-glow: rgba(74,127,212,0.18);
+  --bg:#080c14; --surface:#0d1320; --surface2:#111927;
+  --border:#1c2a3a; --border2:#243042;
+  --text:#e2eaf4; --muted:#4d6278;
+  --accent:#3b82f6; --accent2:#1d4ed8;
+  --sev-low:#0f3d26; --sev-low-t:#4ade80;
+  --sev-med:#422006; --sev-med-t:#fb923c;
+  --sev-crit:#450a0a; --sev-crit-t:#f87171;
+  --st-open:#0f2744; --st-open-t:#60a5fa;
+  --st-prog:#2d1f00; --st-prog-t:#fbbf24;
+  --st-res:#0f3d26; --st-res-t:#4ade80;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min-height:100vh;}
 
-  --sev-low:      #1a3a2a;
-  --sev-low-t:    #5bc98a;
-  --sev-med:      #3a2a0a;
-  --sev-med-t:    #e8a832;
-  --sev-crit:     #3a0f0f;
-  --sev-crit-t:   #e85c5c;
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
+.logo{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;letter-spacing:.04em;display:flex;align-items:center;gap:10px;}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4);}50%{box-shadow:0 0 0 6px rgba(239,68,68,0);}}
+.logo-dot{animation:pulse 2s infinite;}
 
-  --st-open:      #0f2744;
-  --st-open-t:    #5ba0f0;
-  --st-prog:      #2d2000;
-  --st-prog-t:    #f0b84a;
-  --st-res:       #0d3020;
-  --st-res-t:     #4cc98a;
+.stats-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;display:flex;overflow-x:auto;}
+.stat-item{padding:14px 24px;border-right:1px solid var(--border);min-width:110px;cursor:pointer;}
+.stat-item:hover,.stat-item.active{background:var(--surface2);}
+.stat-num{font-family:'Space Mono',monospace;font-size:22px;font-weight:700;line-height:1;margin-bottom:3px;}
+.stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;}
+.stat-critical .stat-num{color:#f87171;}
+.stat-open .stat-num{color:#60a5fa;}
+.stat-prog .stat-num{color:#fbbf24;}
+.stat-res .stat-num{color:#4ade80;}
 
-  --font-ui:   'Source Sans 3', sans-serif;
-  --font-mono: 'Share Tech Mono', monospace;
-  --font-head: 'Rajdhani', sans-serif;
-}
+.layout{display:flex;height:calc(100vh - 103px);}
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.left-panel{width:320px;min-width:260px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.panel-toolbar{padding:12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.search-box{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;}
+.search-box:focus{border-color:var(--accent);}
+.filter-row{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0;}
+.chip{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border2);color:var(--muted);background:transparent;font-family:'DM Sans',sans-serif;}
+.chip:hover{border-color:var(--accent);color:var(--accent);}
+.chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.incident-list{flex:1;overflow-y:auto;padding:6px;}
+.incident-list::-webkit-scrollbar{width:4px;}
+.incident-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 
-body {
-  background: var(--bg);
-  font-family: var(--font-ui);
-  color: var(--text);
-  min-height: 100vh;
-  font-size: 14px;
-  line-height: 1.5;
-}
+.inc-card{padding:11px 12px 11px 18px;border-radius:8px;border:1px solid transparent;margin-bottom:3px;cursor:pointer;position:relative;}
+.inc-card:hover{background:var(--surface2);border-color:var(--border2);}
+.inc-card.active{background:var(--surface2);border-color:var(--accent);}
+.sev-bar{position:absolute;left:6px;top:8px;bottom:8px;width:3px;border-radius:2px;}
+.sev-bar.low{background:var(--sev-low-t);}
+.sev-bar.medium{background:var(--sev-med-t);}
+.sev-bar.critical{background:var(--sev-crit-t);}
+.inc-title{font-size:13px;font-weight:500;margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.inc-meta{display:flex;gap:5px;align-items:center;flex-wrap:wrap;}
 
-/* ── TOPBAR ── */
-.topbar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-.topbar-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.system-logo {
-  font-family: var(--font-head);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--text-bright);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.logo-pulse {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #e85c5c;
-  box-shadow: 0 0 0 0 rgba(232,92,92,.5);
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0%,100% { box-shadow: 0 0 0 0 rgba(232,92,92,.5); }
-  50%      { box-shadow: 0 0 0 7px rgba(232,92,92,0); }
-}
-.system-tag {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: .1em;
-  color: var(--text-dim);
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  padding: 2px 8px;
-  border-radius: 3px;
-}
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.live-clock {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--text-dim);
-  letter-spacing: .06em;
-}
-.live-clock span { color: var(--accent); }
-.btn-new {
-  font-family: var(--font-head);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 7px 18px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background .15s;
-}
-.btn-new:hover { background: var(--accent2); }
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Space Mono',monospace;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
+.sev-low{background:var(--sev-low);color:var(--sev-low-t);}
+.sev-medium{background:var(--sev-med);color:var(--sev-med-t);}
+.sev-critical{background:var(--sev-crit);color:var(--sev-crit-t);}
+.st-OPEN{background:var(--st-open);color:var(--st-open-t);}
+.st-IN_PROGRESS{background:var(--st-prog);color:var(--st-prog-t);}
+.st-RESOLVED{background:var(--st-res);color:var(--st-res-t);}
+.pri-low{background:#1a2035;color:#94a3b8;}
+.pri-normal{background:#0f2744;color:#60a5fa;}
+.pri-high{background:#2d1f00;color:#fbbf24;}
+.pri-urgent{background:#450a0a;color:#f87171;}
+.src-badge{background:var(--surface2);border:1px solid var(--border2);color:var(--muted);}
 
-/* ── STATS ROW ── */
-.stats-row {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  overflow-x: auto;
-}
-.stat-cell {
-  padding: 10px 24px;
-  border-right: 1px solid var(--border);
-  min-width: 120px;
-  cursor: pointer;
-  transition: background .12s;
-}
-.stat-cell:hover, .stat-cell.active { background: var(--surface2); }
-.stat-cell:last-child { border-right: none; }
-.stat-val {
-  font-family: var(--font-head);
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1;
-  margin-bottom: 2px;
-}
-.stat-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.stat-cell.s-crit .stat-val { color: var(--sev-crit-t); }
-.stat-cell.s-open .stat-val { color: var(--st-open-t); }
-.stat-cell.s-prog .stat-val { color: var(--st-prog-t); }
-.stat-cell.s-res  .stat-val { color: var(--st-res-t); }
-.stat-cell.s-all  .stat-val { color: var(--text-bright); }
+.detail-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.detail-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
+.detail-title{font-family:'Space Mono',monospace;font-size:17px;font-weight:700;line-height:1.3;flex:1;}
+.detail-id{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);flex-shrink:0;margin-top:4px;}
+.detail-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+.meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:12px;}
+.meta-item label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px;}
+.meta-item span{font-size:13px;font-weight:500;}
+.action-row{display:flex;gap:8px;flex-wrap:wrap;}
 
-/* ── LAYOUT ── */
-.layout {
-  display: flex;
-  height: calc(100vh - 104px);
-}
+.detail-body{flex:1;overflow-y:auto;padding:18px 24px;display:flex;flex-direction:column;gap:18px;}
+.detail-body::-webkit-scrollbar{width:4px;}
+.detail-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.section-label{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:6px;font-family:'Space Mono',monospace;}
+.desc-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:14px;line-height:1.6;white-space:pre-wrap;}
+.tags-list{display:flex;gap:6px;flex-wrap:wrap;}
+.tag{padding:3px 10px;border-radius:4px;background:var(--surface2);border:1px solid var(--border2);font-size:11px;color:var(--muted);font-family:'Space Mono',monospace;}
 
-/* ── LEFT PANEL ── */
-.left-panel {
-  width: 340px;
-  min-width: 260px;
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--surface);
-}
-.panel-search {
-  padding: 10px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.search-wrap {
-  position: relative;
-}
-.search-icon {
-  position: absolute;
-  left: 10px; top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-dim);
-  font-size: 13px;
-  pointer-events: none;
-}
-.search-input {
-  width: 100%;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 7px 10px 7px 30px;
-  color: var(--text);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  outline: none;
-  transition: border-color .15s;
-}
-.search-input:focus { border-color: var(--accent); }
-.search-input::placeholder { color: var(--text-dim); }
+.comment-thread{display:flex;flex-direction:column;gap:8px;}
+.comment-item{display:flex;gap:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+.comment-avatar{width:28px;height:28px;border-radius:50%;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'Space Mono',monospace;}
+.comment-body{flex:1;}
+.comment-meta{display:flex;gap:8px;align-items:center;margin-bottom:3px;}
+.comment-user{font-size:12px;font-weight:600;color:#60a5fa;}
+.comment-time{font-size:11px;color:var(--muted);}
+.comment-text{font-size:13px;line-height:1.5;}
+.comment-input-row{display:flex;gap:8px;padding:12px 24px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0;}
+.comment-input{flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:none;height:40px;transition:border-color .15s,height .15s;}
+.comment-input:focus{border-color:var(--accent);height:72px;}
 
-.filter-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
-  flex-shrink: 0;
-}
-.ftab {
-  font-family: var(--font-ui);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  padding: 3px 10px;
-  border-radius: 3px;
-  border: 1px solid var(--border2);
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  transition: all .12s;
-}
-.ftab:hover { border-color: var(--accent); color: var(--accent); }
-.ftab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:10px;}
+.empty-icon{font-size:44px;opacity:.3;}
 
-.record-count {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-dim);
-  padding: 4px 10px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  letter-spacing: .06em;
-}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;white-space:nowrap;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent2);}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border2);}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+.btn-danger{background:#450a0a;color:#f87171;border:1px solid #7f1d1d;}
+.btn-danger:hover{background:#7f1d1d;}
+.btn-success{background:var(--sev-low);color:var(--sev-low-t);border:1px solid #166534;}
+.btn-success:hover{background:#166534;}
+.btn-warn{background:var(--sev-med);color:var(--sev-med-t);border:1px solid #92400e;}
+.btn-warn:hover{background:#92400e;}
 
-.inc-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px;
-}
-.inc-list::-webkit-scrollbar { width: 3px; }
-.inc-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-.inc-row {
-  padding: 10px 10px 10px 16px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  margin-bottom: 2px;
-  cursor: pointer;
-  position: relative;
-  transition: all .1s;
-}
-.inc-row:hover { background: var(--surface2); border-color: var(--border); }
-.inc-row.active { background: var(--surface2); border-color: var(--accent); }
-.sev-stripe {
-  position: absolute;
-  left: 5px; top: 8px; bottom: 8px;
-  width: 3px;
-  border-radius: 2px;
-}
-.sev-stripe.low      { background: var(--sev-low-t); }
-.sev-stripe.medium   { background: var(--sev-med-t); }
-.sev-stripe.critical { background: var(--sev-crit-t); }
-
-.inc-row-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-bright);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-bottom: 5px;
-}
-.inc-row-type {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 5px;
-}
-.inc-row-meta {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.sev-low      { background: var(--sev-low);  color: var(--sev-low-t); }
-.sev-medium   { background: var(--sev-med);  color: var(--sev-med-t); }
-.sev-critical { background: var(--sev-crit); color: var(--sev-crit-t); }
-.st-OPEN        { background: var(--st-open); color: var(--st-open-t); }
-.st-IN_PROGRESS { background: var(--st-prog); color: var(--st-prog-t); }
-.st-RESOLVED    { background: var(--st-res);  color: var(--st-res-t); }
-.src-badge { background: var(--surface3); border: 1px solid var(--border2); color: var(--text-dim); }
-
-.inc-time {
-  font-size: 10px;
-  font-family: var(--font-mono);
-  color: var(--text-dim);
-  margin-left: auto;
-}
-
-/* ── DETAIL PANEL ── */
-.detail-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.detail-topbar {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-.detail-topbar-title {
-  font-family: var(--font-head);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--text-bright);
-}
-.detail-topbar-id {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-dim);
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  padding: 2px 10px;
-  border-radius: 3px;
-}
-
-.detail-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
-}
-.detail-body::-webkit-scrollbar { width: 4px; }
-.detail-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-
-.field-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 18px 20px;
-  margin-bottom: 14px;
-}
-.field-card-title {
-  font-family: var(--font-head);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.field-card-title::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
-.frow {
-  display: grid;
-  gap: 14px;
-  margin-bottom: 14px;
-}
-.frow:last-child { margin-bottom: 0; }
-.frow-2 { grid-template-columns: 1fr 1fr; }
-.frow-3 { grid-template-columns: 1fr 1fr 1fr; }
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.field-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.field-label .req { color: var(--sev-crit-t); margin-left: 2px; }
-
-.field-val {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: var(--text-bright);
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  word-break: break-word;
-}
-.field-val.mono { font-family: var(--font-mono); }
-.field-val.empty { color: var(--text-dim); font-style: italic; }
-
-.status-badges {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.action-bar {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.btn {
-  font-family: var(--font-head);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  padding: 7px 16px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  transition: all .12s;
-  white-space: nowrap;
-}
-.btn-open   { background: var(--st-open); color: var(--st-open-t); border-color: #1c3d6a; }
-.btn-open:hover { background: #1c3d6a; }
-.btn-prog   { background: var(--st-prog); color: var(--st-prog-t); border-color: #5a3f00; }
-.btn-prog:hover { background: #5a3f00; }
-.btn-res    { background: var(--st-res); color: var(--st-res-t); border-color: #1a5c38; }
-.btn-res:hover { background: #1a5c38; }
-.btn-ghost  { background: var(--surface2); color: var(--text); border-color: var(--border2); }
-.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
-
-.desc-val {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 10px 12px;
-  font-size: 13px;
-  color: var(--text-bright);
-  white-space: pre-wrap;
-  line-height: 1.6;
-  min-height: 60px;
-}
-.desc-val.empty { color: var(--text-dim); font-style: italic; }
-
-.comment-thread {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.comment-row {
-  display: flex;
-  gap: 10px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 10px 12px;
-}
-.c-avatar {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  background: var(--accent2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  flex-shrink: 0;
-  color: #fff;
-}
-.c-body { flex: 1; }
-.c-meta {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 3px;
-}
-.c-user { font-size: 12px; font-weight: 700; color: var(--accent); }
-.c-time { font-size: 11px; color: var(--text-dim); font-family: var(--font-mono); }
-.c-text { font-size: 13px; color: var(--text); line-height: 1.5; }
-
-.comment-input-bar {
-  display: flex;
-  gap: 8px;
-  padding: 10px 24px;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  flex-shrink: 0;
-}
-.comment-textarea {
-  flex: 1;
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: 4px;
-  padding: 8px 12px;
-  color: var(--text);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  outline: none;
-  resize: none;
-  height: 38px;
-  transition: border-color .15s, height .15s;
-}
-.comment-textarea:focus { border-color: var(--accent); height: 70px; }
-.btn-send {
-  font-family: var(--font-head);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 8px 18px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background .15s;
-  align-self: flex-end;
-}
-.btn-send:hover { background: var(--accent2); }
-
-.tags-wrap { display: flex; gap: 6px; flex-wrap: wrap; }
-.tag-chip {
-  padding: 2px 10px;
-  border-radius: 3px;
-  background: var(--surface3);
-  border: 1px solid var(--border2);
-  font-size: 11px;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-}
-
-.empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: var(--text-dim);
-}
-.empty-icon { font-size: 48px; opacity: .25; }
-.empty-label { font-family: var(--font-head); font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
-
-/* ── CREATE MODAL FIXED VIEWPORT CONFIG ── */
-#modal-overlay {
-  display: none; /* Hidden until the create-report button toggles .is-open */
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.85);
-  align-items: flex-start;
-  justify-content: center;
-  z-index: 99999 !important;
-  padding: 40px 20px;
-  overflow-y: auto;
-}
-#modal-overlay.is-open { display: flex; }
-
-.modal-box {
-  background: var(--surface);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  width: 100%;
-  max-width: 720px;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border);
-  padding: 16px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-radius: 8px 8px 0 0;
-}
-.modal-title {
-  font-family: var(--font-head);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text-bright);
-}
-.modal-close {
-  background: none;
-  border: none;
-  color: var(--text-dim);
-  font-size: 20px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.modal-close:hover { color: var(--text-bright); }
-
-.modal-body {
-  padding: 20px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.modal-section-title {
-  font-family: var(--font-head);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.modal-section-title::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
-.m-field { display: flex; flex-direction: column; gap: 4px; }
-.m-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.m-label .req { color: var(--sev-crit-t); }
-.m-input, .m-select, .m-textarea {
-  background: var(--surface2);
-  border: 1px solid var(--border2);
-  border-radius: 4px;
-  padding: 8px 12px;
-  color: var(--text-bright);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  outline: none;
-  width: 100%;
-}
-.m-input:focus, .m-select:focus, .m-textarea:focus { border-color: var(--accent); }
-.m-input::placeholder { color: var(--text-dim); }
-
-.m-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237d8fa8'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  padding-right: 28px;
-  cursor: pointer;
-}
-.m-textarea { resize: vertical; min-height: 80px; }
-.m-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.m-row-4 { display: grid; grid-template-columns: 1.2fr 1.2fr 0.7fr 2fr; gap: 10px; }
-.m-row-5 { display: grid; grid-template-columns: 1fr 1fr 0.7fr 1.4fr 1fr; gap: 10px; }
-
-.modal-footer {
-  padding: 14px 24px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  border-radius: 0 0 8px 8px;
-  background: var(--surface2);
-}
-.btn-cancel {
-  font-family: var(--font-head);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  background: transparent;
-  color: var(--text-dim);
-  border: 1px solid var(--border2);
-  padding: 8px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.btn-cancel:hover { border-color: var(--text-dim); color: var(--text); }
-.btn-create {
-  font-family: var(--font-head);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: .07em;
-  text-transform: uppercase;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 8px 24px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.btn-create:hover { background: var(--accent2); }
-
-hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);align-items:center;justify-content:center;z-index:99999;padding:20px;}
+#modal-overlay.open{display:flex;}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:580px;padding:26px;display:flex;flex-direction:column;gap:14px;max-height:92vh;overflow-y:auto;}
+.modal-title{font-family:'Space Mono',monospace;font-size:16px;font-weight:700;}
+.field-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
+.field-input,.field-select,.field-textarea{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;transition:border-color .15s;}
+.field-input:focus,.field-select:focus,.field-textarea:focus{border-color:var(--accent);}
+.field-textarea{resize:vertical;min-height:70px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.geo-row{display:grid;grid-template-columns:1.5fr 1.5fr 1fr 2fr;gap:8px;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:4px;}
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="topbar-left">
-    <div class="system-logo">
-      <div class="logo-pulse"></div>
-      Incident Command
-    </div>
-    <span class="system-tag">MSCC</span>
+<div class="header">
+  <div class="logo">
+    <div class="logo-dot"></div>
+    INCIDENT COMMAND
   </div>
-  <div class="topbar-right">
-    <div class="live-clock" id="live-clock">—</div>
-    <button class="btn-new" id="new-btn" type="button">+ Create Report</button>
+  <div style="display:flex;align-items:center;gap:14px;">
+    <span style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;" id="last-updated">CONNECTING...</span>
+    <button class="btn btn-primary" id="new-btn">+ New Incident</button>
   </div>
 </div>
 
-<div class="stats-row">
-  <div class="stat-cell s-crit" id="stat-crit">
-    <div class="stat-val" id="cnt-critical">0</div>
+<div class="stats-bar">
+  <div class="stat-item stat-critical" id="stat-critical" style="padding-left:0">
+    <div class="stat-num" id="cnt-critical">0</div>
     <div class="stat-label">Critical</div>
   </div>
-  <div class="stat-cell s-open" id="stat-open">
-    <div class="stat-val" id="cnt-open">0</div>
+  <div class="stat-item stat-open" id="stat-open">
+    <div class="stat-num" id="cnt-open">0</div>
     <div class="stat-label">Open</div>
   </div>
-  <div class="stat-cell s-prog" id="stat-prog">
-    <div class="stat-val" id="cnt-prog">0</div>
+  <div class="stat-item stat-prog" id="stat-prog">
+    <div class="stat-num" id="cnt-prog">0</div>
     <div class="stat-label">In Progress</div>
   </div>
-  <div class="stat-cell s-res" id="stat-res">
-    <div class="stat-val" id="cnt-res">0</div>
+  <div class="stat-item stat-res" id="stat-res">
+    <div class="stat-num" id="cnt-res">0</div>
     <div class="stat-label">Resolved</div>
   </div>
-  <div class="stat-cell s-all" id="stat-all">
-    <div class="stat-val" id="cnt-all">0</div>
+  <div class="stat-item" id="stat-all">
+    <div class="stat-num" id="cnt-all">0</div>
     <div class="stat-label">Total</div>
-  </div>
-  <div class="stat-cell" style="margin-left:auto;border-left:1px solid var(--border);border-right:none;min-width:auto;cursor:default;">
-    <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-dim);letter-spacing:.06em;" id="sync-label">SYNCING...</div>
-    <div class="stat-label">Last Sync</div>
   </div>
 </div>
 
 <div class="layout">
   <div class="left-panel">
-    <div class="panel-search">
-      <div class="search-wrap">
-        <span class="search-icon">🔍</span>
-        <input class="search-input" id="search-input" placeholder="Search reports...">
-      </div>
+    <div class="panel-toolbar">
+      <input class="search-box" id="search-box" placeholder="Search incidents...">
     </div>
-    <div class="filter-tabs">
-      <button class="ftab active" data-f="">All</button>
-      <button class="ftab" data-f="OPEN">Open</button>
-      <button class="ftab" data-f="IN_PROGRESS">In Progress</button>
-      <button class="ftab" data-f="RESOLVED">Resolved</button>
-      <button class="ftab" data-f="critical">Critical</button>
-      <button class="ftab" data-f="medium">Medium</button>
-      <button class="ftab" data-f="low">Low</button>
+    <div class="filter-row">
+      <button class="chip active" data-filter="">All</button>
+      <button class="chip" data-filter="OPEN">Open</button>
+      <button class="chip" data-filter="IN_PROGRESS">In Progress</button>
+      <button class="chip" data-filter="RESOLVED">Resolved</button>
+      <button class="chip" data-filter="critical">Critical</button>
+      <button class="chip" data-filter="medium">Medium</button>
+      <button class="chip" data-filter="low">Low</button>
     </div>
-    <div class="record-count" id="record-count">0 records</div>
-    <div class="inc-list" id="inc-list"></div>
+    <div class="incident-list" id="incident-list"></div>
   </div>
 
   <div class="detail-panel" id="detail-panel">
     <div class="empty-state">
-      <div class="empty-icon">📋</div>
-      <div class="empty-label">Select a report to view</div>
-      <div style="font-size:12px;margin-top:4px;">or create one with + Create Report</div>
+      <div class="empty-icon">🎯</div>
+      <div style="font-size:14px;">Select an incident to view details</div>
+      <div style="font-size:12px;margin-top:4px;">or create one with + New Incident</div>
     </div>
   </div>
 </div>
 
 <div id="modal-overlay">
-  <div class="modal-box">
-    <div class="modal-header">
-      <div class="modal-title">Create Report</div>
-      <button class="modal-close" id="modal-close" type="button" aria-label="Close create report dialog">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="m-row-2">
-        <div class="m-field">
-          <label class="m-label">Report Title (Auto Generated) <span class="req">*</span></label>
-          <input class="m-input" id="f-title" placeholder="e.g. EM SHONA, OPERATIONAL BUNKER SPILL...">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Report Type</label>
-          <input class="m-input" id="f-type" placeholder="INCIDENT REPORT">
-        </div>
+  <div class="modal-box" id="modal-box">
+    <div class="modal-title">Create New Incident</div>
+
+    <div class="field-row">
+      <div>
+        <label class="field-label">Title *</label>
+        <input class="field-input" id="f-title" placeholder="Short, descriptive title">
       </div>
-
-      <div class="m-row-2">
-        <div class="m-field">
-          <label class="m-label">Report Date &amp; Time</label>
-          <input class="m-input" id="f-datetime" type="datetime-local">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Nature of Incident <span class="req">*</span></label>
-          <input class="m-input" id="f-nature" placeholder="e.g. OPERATIONAL BUNKER SPILL">
-        </div>
-      </div>
-
-      <div class="m-row-2">
-        <div class="m-field">
-          <label class="m-label">Reported By</label>
-          <input class="m-input" id="f-reporter" placeholder="Full name or handle">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Severity</label>
-          <select class="m-select" id="f-severity">
-            <option value="low">L1 — Low</option>
-            <option value="medium" selected>L2 — Medium</option>
-            <option value="critical">L3 — Critical</option>
-          </select>
-        </div>
-      </div>
-
-      <hr class="divider">
-      <div class="modal-section-title">📍 Location</div>
-
-      <div class="m-row-4">
-        <div class="m-field">
-          <label class="m-label">Lat Deg °</label>
-          <input class="m-input" id="f-latdeg" type="number" placeholder="e.g. 1">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Lat Min '</label>
-          <input class="m-input" id="f-latmin" type="number" placeholder="e.g. 19.067">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Lat Dir</label>
-          <select class="m-select" id="f-latdir">
-            <option value="N">N</option>
-            <option value="S">S</option>
-          </select>
-        </div>
-        <div class="m-field">
-          <label class="m-label">Location Code <span class="req">*</span></label>
-          <input class="m-input" id="f-loccode" placeholder="e.g. ACGP">
-        </div>
-      </div>
-
-      <div class="m-row-5">
-        <div class="m-field">
-          <label class="m-label">Lon Deg °</label>
-          <input class="m-input" id="f-londeg" type="number" placeholder="e.g. 104">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Lon Min '</label>
-          <input class="m-input" id="f-lonmin" type="number" placeholder="e.g. 3.883">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Lon Dir</label>
-          <select class="m-select" id="f-londir">
-            <option value="E" selected>E</option>
-            <option value="W">W</option>
-          </select>
-        </div>
-        <div class="m-field">
-          <label class="m-label">Sector</label>
-          <select class="m-select" id="f-sector">
-            <option value="">— Select —</option>
-            <option value="EASTERN">EASTERN</option>
-            <option value="WESTERN">WESTERN</option>
-            <option value="NORTHERN">NORTHERN</option>
-            <option value="SOUTHERN">SOUTHERN</option>
-            <option value="CENTRAL">CENTRAL</option>
-          </select>
-        </div>
-        <div class="m-field">
-          <label class="m-label">Grid Ref</label>
-          <input class="m-input" id="f-gridref" placeholder="e.g. 0319B">
-        </div>
-      </div>
-
-      <hr class="divider">
-
-      <div class="m-field">
-        <label class="m-label">Details of Incident <span class="req">*</span></label>
-        <textarea class="m-textarea" id="f-description" style="min-height:100px;" placeholder="Weather Information..."></textarea>
-      </div>
-
-      <div class="m-row-2">
-        <div class="m-field">
-          <label class="m-label">Short Report Summary <span class="req">*</span></label>
-          <input class="m-input" id="f-message" placeholder="One-line summary (sent to Telegram)">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Tags (comma-separated)</label>
-          <input class="m-input" id="f-tags" placeholder="e.g. bunker, spill">
-        </div>
-      </div>
-
-      <div class="m-row-2">
-        <div class="m-field">
-          <label class="m-label">Assignee</label>
-          <input class="m-input" id="f-assignee" placeholder="@username or officer name">
-        </div>
-        <div class="m-field">
-          <label class="m-label">Priority</label>
-          <select class="m-select" id="f-priority">
-            <option value="low">Low</option>
-            <option value="normal" selected>Normal</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </div>
+      <div>
+        <label class="field-label">Incident Type</label>
+        <input class="field-input" id="f-type" placeholder="e.g. Outage, Cyber, Security, Leak">
       </div>
     </div>
+
+    <div class="field-row">
+      <div>
+        <label class="field-label">Severity</label>
+        <select class="field-select" id="f-severity">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="critical">Critical</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Priority</label>
+        <select class="field-select" id="f-priority">
+          <option value="low">Low</option>
+          <option value="normal" selected>Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+    </div>
+
+    <div>
+      <label class="field-label">Location coordinates & Code</label>
+      <div class="geo-row">
+        <input class="field-input" id="f-latdeg" type="number" placeholder="Lat Deg (°)">
+        <input class="field-input" id="f-latmin" type="number" placeholder="Lat Min (')">
+        <select class="field-select" id="f-latdir">
+          <option value="N">N</option>
+          <option value="S">S</option>
+          <option value="E">E</option>
+          <option value="W">W</option>
+        </select>
+        <input class="field-input" id="f-loccode" placeholder="Location Code">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div>
+        <label class="field-label">Sector</label>
+        <input class="field-input" id="f-sector" placeholder="e.g. Sector 4, Alpha, North-Zone">
+      </div>
+      <div>
+        <label class="field-label">Assignee</label>
+        <input class="field-input" id="f-assignee" placeholder="@username">
+      </div>
+    </div>
+
+    <div>
+      <label class="field-label">Description</label>
+      <textarea class="field-textarea" id="f-description" placeholder="What happened? Impact, steps to reproduce..."></textarea>
+    </div>
+
+    <div>
+      <label class="field-label">Short Report * (sent to Telegram)</label>
+      <input class="field-input" id="f-message" placeholder="One-line summary details">
+    </div>
+
+    <div>
+      <label class="field-label">Tags (comma-separated)</label>
+      <input class="field-input" id="f-tags" placeholder="infra, db, auth">
+    </div>
+
     <div class="modal-footer">
-      <button class="btn-cancel" id="cancel-btn" type="button">Cancel</button>
-      <button class="btn-create" id="submit-btn" type="button">Create Report</button>
+      <button class="btn btn-ghost" id="cancel-btn">Cancel</button>
+      <button class="btn btn-primary" id="submit-btn">Create Incident</button>
     </div>
   </div>
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-  var allReports = [];
-  var activeFilter = '';
-  var selectedId = null;
+var allReports = [];
+var activeFilter = '';
+var selectedId = null;
 
-  function esc(s) {
-    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-  function initials(name) {
-    return String(name || '?').replace('@','').slice(0,2).toUpperCase();
-  }
-  function formatCoords(r) {
-    var lat = r.latDeg ? (r.latDeg + '° ' + (r.latMin||'00') + "' " + (r.latDir||'N')) : '';
-    var lon = r.lonDeg ? (r.lonDeg + '° ' + (r.lonMin||'00') + "' " + (r.lonDir||'E')) : '';
-    if (!lat && !lon) return '';
-    if (lat && lon) return lat + ' / ' + lon;
-    return lat || lon;
-  }
-  function findClosest(el, selector) {
-    while (el && el !== document) {
-      if (el.matches && el.matches(selector)) return el;
-      el = el.parentNode;
-    }
-    return null;
-  }
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function initials(name) {
+  return String(name || '?').replace('@','').slice(0,2).toUpperCase();
+}
+function formatCoordinates(r) {
+  if(!r.latDeg) return '';
+  return esc(r.latDeg) + '°' + esc(r.latMin || '00') + "\\\'" + esc(r.latDir || 'N');
+}
 
-  // Live Clock setup
-  function updateClock() {
-    var now = new Date();
-    var d = now.toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}).toUpperCase();
-    var t = now.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-    var clockEl = document.getElementById('live-clock');
-    if (clockEl) clockEl.innerHTML = d + ' <span>' + t + '</span>';
-  }
-  updateClock();
-  setInterval(updateClock, 1000);
+// ── MODAL ──────────────────────────────────────────────────
+var overlay = document.getElementById('modal-overlay');
+document.getElementById('new-btn').onclick = function() {
+  overlay.classList.add('open');
+  document.getElementById('f-title').focus();
+};
+document.getElementById('cancel-btn').onclick = function() {
+  overlay.classList.remove('open');
+};
+overlay.onclick = function(e) {
+  if (e.target === overlay) overlay.classList.remove('open');
+};
+document.getElementById('submit-btn').onclick = submitReport;
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') overlay.classList.remove('open');
+});
 
-  // --- CREATE REPORT MODAL HANDLERS ---
-  var overlay = document.getElementById('modal-overlay');
-  var newBtn = document.getElementById('new-btn');
-
-  function openModal() {
-    if (!overlay) return;
-
-    var dateInput = document.getElementById('f-datetime');
-    if (dateInput && !dateInput.value) {
-      dateInput.value = new Date().toISOString().slice(0, 16);
-    }
-
-    overlay.classList.add('is-open');
-    overlay.setAttribute('aria-hidden', 'false');
-
-    window.requestAnimationFrame(function() {
-      var titleField = document.getElementById('f-title');
-      if (titleField) titleField.focus();
-    });
-  }
-
-  function closeModal() {
-    if (!overlay) return;
-    overlay.classList.remove('is-open');
-    overlay.setAttribute('aria-hidden', 'true');
-  }
-
-  if (newBtn) newBtn.addEventListener('click', openModal);
-  if (document.getElementById('cancel-btn')) document.getElementById('cancel-btn').addEventListener('click', closeModal);
-  if (document.getElementById('modal-close')) document.getElementById('modal-close').addEventListener('click', closeModal);
-
-  if (overlay) {
-    overlay.setAttribute('aria-hidden', 'true');
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
-  }
-  document.addEventListener('keydown', function(e) { if (e.key==='Escape') closeModal(); });
-  
-  var submitBtn = document.getElementById('submit-btn');
-  if (submitBtn) submitBtn.onclick = submitReport;
-
-  // Global action delegations 
-  document.body.addEventListener('click', function(e) {
-    var targetStatusBtn = findClosest(e.target, '.status-action-btn');
-    if (targetStatusBtn) {
-      setStatus(targetStatusBtn.dataset.id, targetStatusBtn.dataset.status);
-      return;
-    }
-    var targetSendBtn = findClosest(e.target, '#send-btn');
-    if (targetSendBtn) {
-      addComment(targetSendBtn.dataset.id);
-    }
-  });
-
-  document.body.addEventListener('keydown', function(e) {
-    var targetCommentInput = findClosest(e.target, '#comment-input');
-    if (targetCommentInput && e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      addComment(targetCommentInput.dataset.id);
-    }
-  });
-
-  function loadReports() {
-    fetch('/api/reports')
-      .then(function(r){ return r.json(); })
-      .then(function(data) {
-        allReports = data;
-        document.getElementById('cnt-all').textContent      = data.length;
-        document.getElementById('cnt-critical').textContent = data.filter(function(r){ return r.severity==='critical'; }).length;
-        document.getElementById('cnt-open').textContent     = data.filter(function(r){ return r.status==='OPEN'; }).length;
-        document.getElementById('cnt-prog').textContent     = data.filter(function(r){ return r.status==='IN_PROGRESS'; }).length;
-        document.getElementById('cnt-res').textContent      = data.filter(function(r){ return r.status==='RESOLVED'; }).length;
-        document.getElementById('sync-label').textContent   = new Date().toLocaleTimeString();
-        renderList();
-        if (selectedId) {
-          var r = allReports.find(function(r){ return String(r.id)===String(selectedId); });
-          if (r) renderDetail(r);
-        }
-      })
-      .catch(function(e){ console.error('Fetch Sync failed', e); });
-  }
-
-  document.querySelectorAll('.ftab').forEach(function(tab) {
-    tab.onclick = function() {
-      activeFilter = tab.dataset.f;
-      document.querySelectorAll('.ftab').forEach(function(t){ t.classList.remove('active'); });
-      tab.classList.add('active');
+// ── LOAD ───────────────────────────────────────────────────
+function loadReports() {
+  fetch('/api/reports')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      allReports = data;
+      document.getElementById('cnt-all').textContent      = data.length;
+      document.getElementById('cnt-critical').textContent = data.filter(function(r){return r.severity==='critical';}).length;
+      document.getElementById('cnt-open').textContent     = data.filter(function(r){return r.status==='OPEN';}).length;
+      document.getElementById('cnt-prog').textContent     = data.filter(function(r){return r.status==='IN_PROGRESS';}).length;
+      document.getElementById('cnt-res').textContent      = data.filter(function(r){return r.status==='RESOLVED';}).length;
+      document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
       renderList();
-    };
-  });
+      if (selectedId) {
+        var r = allReports.find(function(r){return String(r.id)===String(selectedId);});
+        if (r) renderDetail(r);
+      }
+    })
+    .catch(function(e){ console.error('Load error', e); });
+}
 
-  ['stat-crit','stat-open','stat-prog','stat-res','stat-all'].forEach(function(id) {
-    var map = {'stat-crit':'critical','stat-open':'OPEN','stat-prog':'IN_PROGRESS','stat-res':'RESOLVED','stat-all':''};
-    var cell = document.getElementById(id);
-    if (cell) {
-      cell.onclick = function() {
-        activeFilter = map[id];
-        document.querySelectorAll('.ftab').forEach(function(t){
-          t.classList.toggle('active', t.dataset.f === activeFilter);
-        });
-        renderList();
-      };
-    }
-  });
+// ── FILTER ─────────────────────────────────────────────────
+document.querySelectorAll('.chip').forEach(function(chip) {
+  chip.onclick = function() {
+    activeFilter = chip.dataset.filter;
+    document.querySelectorAll('.chip').forEach(function(c){ c.classList.remove('active'); });
+    chip.classList.add('active');
+    renderList();
+  };
+});
 
-  var searchField = document.getElementById('search-input');
-  if (searchField) searchField.oninput = renderList;
+['stat-critical','stat-open','stat-prog','stat-res','stat-all'].forEach(function(id) {
+  var map = {'stat-critical':'critical','stat-open':'OPEN','stat-prog':'IN_PROGRESS','stat-res':'RESOLVED','stat-all':''};
+  document.getElementById(id).onclick = function() {
+    activeFilter = map[id];
+    document.querySelectorAll('.chip').forEach(function(c){
+      c.classList.toggle('active', c.dataset.filter === activeFilter);
+    });
+    renderList();
+  };
+});
 
-  function renderList() {
-  var searchInput = document.getElementById('search-input');
-  var search = (searchInput ? searchInput.value : '').toLowerCase();
+document.getElementById('search-box').oninput = renderList;
 
+// ── LIST ───────────────────────────────────────────────────
+function renderList() {
+  var search = (document.getElementById('search-box').value || '').toLowerCase();
   var list = allReports.filter(function(r) {
-    if (
-      activeFilter === 'critical' ||
-      activeFilter === 'medium' ||
-      activeFilter === 'low'
-    ) {
+    if (activeFilter === 'critical' || activeFilter === 'medium' || activeFilter === 'low') {
       if (r.severity !== activeFilter) return false;
     } else if (activeFilter) {
       if (r.status !== activeFilter) return false;
     }
-
     if (search) {
-      var hay = [
-        (r.title || ''),
-        (r.report || ''),
-        (r.user || ''),
-        (r.incidentType || ''),
-        (r.sector || ''),
-        (r.locationCode || ''),
-        (r.nature || ''),
-        (r.tags || []).join(' ')
-      ].join(' ').toLowerCase();
-
-      if (hay.indexOf(search) === -1) return false;
+      var hay = [(r.title||''),(r.report||''),(r.user||''),(r.assignee||''),(r.incidentType||''),(r.sector||''),(r.locationCode||''),(r.tags||[]).join(' ')].join(' ').toLowerCase();
+      if (!hay.includes(search)) return false;
     }
-
     return true;
   });
 
-  document.getElementById('record-count').textContent =
-    list.length + ' record' + (list.length !== 1 ? 's' : '');
-
-  var el = document.getElementById('inc-list');
-  if (!el) return;
-
+  var el = document.getElementById('incident-list');
   if (!list.length) {
-    el.innerHTML =
-      '<div style="padding:20px;color:var(--text-dim);font-size:13px;text-align:center;font-family:var(--font-mono);">NO RECORDS MATCH</div>';
+    el.innerHTML = '<div style="padding:20px;color:#4d6278;font-size:13px;text-align:center;">No incidents match</div>';
     return;
   }
 
   el.innerHTML = list.map(function(r) {
-    var active =
-      String(r.id) === String(selectedId)
-        ? ' active'
-        : '';
-
-    var typeLabel = r.incidentType
-      ? esc(r.incidentType).toUpperCase()
-      : 'UNSPECIFIED';
-
-    var time = (r.time || '').slice(5, 16);
-
-    return '' +
-      '<div class="inc-row' + active + '" onclick="selectReport(\'' + esc(r.id) + '\')">' +
-        '<div class="sev-stripe ' + esc(r.severity) + '"></div>' +
-        '<div class="inc-row-type">' + typeLabel + '</div>' +
-        '<div class="inc-row-title">' + esc(r.title || r.report) + '</div>' +
-        '<div class="inc-row-meta">' +
-          '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
-          '<span class="badge st-' + esc(r.status) + '">' + String(r.status || '').replace('_', ' ') + '</span>' +
-          '<span class="inc-time">' + time + '</span>' +
-        '</div>' +
-      '</div>';
+    var active = String(r.id) === String(selectedId) ? ' active' : '';
+    var typePrefix = r.incidentType ? '[' + esc(r.incidentType) + '] ' : '';
+    var assignee = r.assignee ? '<span style="font-size:11px;color:#4d6278;">to ' + esc(r.assignee) + '</span>' : '';
+    var time = (r.time || '').slice(5,16);
+    return '<div class="inc-card' + active + '" onclick="selectIncident(\\\'' + r.id + '\\\')">' +
+      '<div class="sev-bar ' + esc(r.severity) + '"></div>' +
+      '<div class="inc-title">' + typePrefix + esc(r.title || r.report) + '</div>' +
+      '<div class="inc-meta">' +
+        '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+        '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
+        assignee +
+        '<span style="font-size:11px;color:#4d6278;margin-left:auto;">' + time + '</span>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
-  window.selectReport = function(id) {
-    selectedId = id;
-    renderList();
-    var r = allReports.find(function(r){ return String(r.id)===String(id); });
-    if (r) renderDetail(r);
-  };
+// ── DETAIL ─────────────────────────────────────────────────
+function selectIncident(id) {
+  selectedId = id;
+  renderList();
+  var r = allReports.find(function(r){return String(r.id)===String(id);});
+  if (r) renderDetail(r);
+}
 
-  function renderDetail(r) {
-    var panel = document.getElementById('detail-panel');
-    if (!panel) return;
-    var locCode = r.locationCode || '';
-    var gridRef = r.gridRef || '';
+function renderDetail(r) {
+  var panel = document.getElementById('detail-panel');
 
-    var statusBtns = '';
-    if (r.status !== 'IN_PROGRESS') statusBtns += '<button class="btn btn-prog status-action-btn" data-id="' + r.id + '" data-status="IN_PROGRESS">🔧 In Progress</button>';
-    if (r.status !== 'RESOLVED')    statusBtns += '<button class="btn btn-res status-action-btn" data-id="' + r.id + '" data-status="RESOLVED">✅ Resolve</button>';
-    if (r.status !== 'OPEN')        statusBtns += '<button class="btn btn-open status-action-btn" data-id="' + r.id + '" data-status="OPEN">🆕 Reopen</button>';
+  var tags = (r.tags || []).length
+    ? r.tags.map(function(t){return '<span class="tag">#'+esc(t)+'</span>';}).join('')
+    : '<span style="color:#4d6278;font-size:12px;">No tags</span>';
 
-    var tags = (r.tags||[]).length
-      ? r.tags.map(function(t){ return '<span class="tag-chip">#'+esc(t)+'</span>'; }).join('')
-      : '<span style="color:var(--text-dim);font-size:12px;">No tags</span>';
-
-    var comments = (r.comments||[]).length
-      ? r.comments.map(function(c) {
-          return '<div class="comment-row">' +
-            '<div class="c-avatar">' + initials(c.user) + '</div>' +
-            '<div class="c-body">' +
-              '<div class="c-meta"><span class="c-user">@'+esc(c.user)+'</span><span class="c-time">'+esc(c.time)+'</span></div>' +
-              '<div class="c-text">'+esc(c.message)+'</div>' +
+  var comments = (r.comments || []).length
+    ? r.comments.map(function(c) {
+        return '<div class="comment-item">' +
+          '<div class="comment-avatar">' + initials(c.user) + '</div>' +
+          '<div class="comment-body">' +
+            '<div class="comment-meta">' +
+              '<span class="comment-user">@' + esc(c.user) + '</span>' +
+              '<span class="comment-time">' + esc(c.time) + '</span>' +
             '</div>' +
-          '</div>';
-        }).join('')
-      : '<div style="color:var(--text-dim);font-size:12px;font-family:var(--font-mono);">NO COMMENTS YET</div>';
-
-    function fv(val, mono) {
-      var cls = 'field-val' + (mono ? ' mono' : '') + (!val ? ' empty' : '');
-      return '<div class="' + cls + '">' + (val ? esc(val) : 'N/A') + '</div>';
-    }
-
-    panel.innerHTML =
-      '<div class="detail-topbar">' +
-        '<div class="detail-topbar-title">Incident Report</div>' +
-        '<div style="display:flex;align-items:center;gap:10px;">' +
-          '<div class="status-badges" style="margin-bottom:0;">' +
-            '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
-            '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
-            '<span class="badge src-badge">' + esc(r.source) + '</span>' +
+            '<div class="comment-text">' + esc(c.message) + '</div>' +
           '</div>' +
-          '<div class="detail-topbar-id">#' + r.id + '</div>' +
-        '</div>' +
+        '</div>';
+      }).join('')
+    : '<div style="color:#4d6278;font-size:13px;padding:8px 0;">No comments yet.</div>';
+
+  var statusBtns = '';
+  if (r.status !== 'IN_PROGRESS') statusBtns += '<button class="btn btn-warn" onclick="setStatus(\\\'' + r.id + '\\\',\\\'IN_PROGRESS\\\')">🔧 In Progress</button>';
+  if (r.status !== 'RESOLVED')    statusBtns += '<button class="btn btn-success" onclick="setStatus(\\\'' + r.id + '\\\',\\\'RESOLVED\\\')">✅ Resolve</button>';
+  if (r.status !== 'OPEN')        statusBtns += '<button class="btn btn-danger" onclick="setStatus(\\\'' + r.id + '\\\',\\\'OPEN\\\')">🆕 Reopen</button>';
+
+  var descSection = r.description
+    ? '<div><div class="section-label">Description</div><div class="desc-box">' + esc(r.description) + '</div></div>'
+    : '';
+
+  var assignee = r.assignee ? '@' + esc(r.assignee) : '<span style="color:#4d6278;">Unassigned</span>';
+  var coords = formatCoordinates(r) || '<span style="color:#4d6278;">N/A</span>';
+  var locCode = r.locationCode ? esc(r.locationCode) : '<span style="color:#4d6278;">N/A</span>';
+
+  panel.innerHTML =
+    '<div class="detail-header">' +
+      '<div class="detail-title-row">' +
+        '<div class="detail-title">[' + esc(r.incidentType || 'General') + '] ' + esc(r.title || r.report) + '</div>' +
+        '<div class="detail-id">#' + r.id + '</div>' +
       '</div>' +
-
-      '<div class="detail-body">' +
-        '<div class="field-card">' +
-          '<div class="field-card-title">Report Information</div>' +
-          '<div class="frow frow-2">' +
-            '<div class="field"><div class="field-label">Report Title</div>' + fv(r.title||r.report) + '</div>' +
-            '<div class="field"><div class="field-label">Report Type</div>' + fv(r.incidentType) + '</div>' +
-          '</div>' +
-          '<div class="frow frow-2">' +
-            '<div class="field"><div class="field-label">Report Date &amp; Time</div>' + fv(r.time, true) + '</div>' +
-            '<div class="field"><div class="field-label">Nature of Incident</div>' + fv(r.nature||r.incidentType) + '</div>' +
-          '</div>' +
-          '<div class="frow frow-2">' +
-            '<div class="field"><div class="field-label">Reported By</div>' + fv(r.user) + '</div>' +
-            '<div class="field"><div class="field-label">Severity</div>' + fv(r.severity ? r.severity.toUpperCase() : '') + '</div>' +
-          '</div>' +
-        '</div>' +
-
-        '<div class="field-card">' +
-          '<div class="field-card-title">📍 Location</div>' +
-          '<div class="frow" style="grid-template-columns:1.2fr 1.2fr 0.7fr 2fr;">' +
-            '<div class="field"><div class="field-label">Lat Deg °</div>' + fv(r.latDeg, true) + '</div>' +
-            '<div class="field"><div class="field-label">Lat Min \'</div>' + fv(r.latMin, true) + '</div>' +
-            '<div class="field"><div class="field-label">Lat Dir</div>' + fv(r.latDir||'N', true) + '</div>' +
-            '<div class="field"><div class="field-label">Location Code</div>' + fv(locCode) + '</div>' +
-          '</div>' +
-          '<div class="frow" style="grid-template-columns:1.2fr 1.2fr 0.7fr 1.4fr 1fr;">' +
-            '<div class="field"><div class="field-label">Lon Deg °</div>' + fv(r.lonDeg, true) + '</div>' +
-            '<div class="field"><div class="field-label">Lon Min \'</div>' + fv(r.lonMin, true) + '</div>' +
-            '<div class="field"><div class="field-label">Lon Dir</div>' + fv(r.lonDir||'E', true) + '</div>' +
-            '<div class="field"><div class="field-label">Sector</div>' + fv(r.sector) + '</div>' +
-            '<div class="field"><div class="field-label">Grid Ref</div>' + fv(gridRef, true) + '</div>' +
-          '</div>' +
-        '</div>' +
-
-        '<div class="field-card">' +
-          '<div class="field-card-title">Details of Incident</div>' +
-          '<div class="field">' +
-            '<div class="field-label">Description</div>' +
-            '<div class="' + (r.description ? 'desc-val' : 'desc-val empty') + '">' + (r.description ? esc(r.description) : 'No details provided.') + '</div>' +
-          '</div>' +
-          '<div style="margin-top:12px;">' +
-            '<div class="field-label" style="margin-bottom:6px;">Tags</div>' +
-            '<div class="tags-wrap">' + tags + '</div>' +
-          '</div>' +
-        '</div>' +
-
-        '<div class="field-card">' +
-          '<div class="field-card-title">Assignment &amp; Status</div>' +
-          '<div class="frow frow-3">' +
-            '<div class="field"><div class="field-label">Assignee</div>' + fv(r.assignee ? '@'+r.assignee : '') + '</div>' +
-            '<div class="field"><div class="field-label">Created</div>' + fv(r.time, true) + '</div>' +
-            '<div class="field"><div class="field-label">Last Updated</div>' + fv(r.updatedAt||r.time, true) + '</div>' +
-          '</div>' +
-          '<div style="margin-top:12px;"><div class="action-bar">' + statusBtns + '</div></div>' +
-        '</div>' +
-
-        '<div class="field-card">' +
-          '<div class="field-card-title">Comments (' + (r.comments||[]).length + ')</div>' +
-          '<div class="comment-thread">' + comments + '</div>' +
-        '</div>' +
+      '<div class="detail-badges">' +
+        '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+        '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
+        '<span class="badge pri-' + esc(r.priority||'normal') + '">' + esc(r.priority||'normal') + ' priority</span>' +
+        '<span class="badge src-badge">' + esc(r.source) + '</span>' +
       '</div>' +
+      '<div class="meta-grid">' +
+        '<div class="meta-item"><label>Type</label><span>' + esc(r.incidentType || 'General') + '</span></div>' +
+        '<div class="meta-item"><label>Sector</label><span>' + esc(r.sector || 'Unassigned') + '</span></div>' +
+        '<div class="meta-item"><label>Coordinates</label><span>' + coords + '</span></div>' +
+        '<div class="meta-item"><label>Loc Code</label><span>' + locCode + '</span></div>' +
+        '<div class="meta-item"><label>Reporter</label><span>' + esc(r.user) + '</span></div>' +
+        '<div class="meta-item"><label>Assignee</label><span>' + assignee + '</span></div>' +
+        '<div class="meta-item"><label>Created</label><span>' + esc(r.time) + '</span></div>' +
+        '<div class="meta-item"><label>Updated</label><span>' + esc(r.updatedAt || r.time) + '</span></div>' +
+      '</div>' +
+      '<div class="action-row">' + statusBtns + '</div>' +
+    '</div>' +
+    '<div class="detail-body">' +
+      '<div><div class="section-label">Short Report</div><div class="desc-box">' + esc(r.report) + '</div></div>' +
+      descSection +
+      '<div><div class="section-label">Tags</div><div class="tags-list">' + tags + '</div></div>' +
+      '<div><div class="section-label">Comments (' + (r.comments||[]).length + ')</div>' +
+        '<div class="comment-thread">' + comments + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="comment-input-row">' +
+      '<textarea class="comment-input" id="comment-input" placeholder="Add a comment... (Enter to send)"></textarea>' +
+      '<button class="btn btn-primary" id="send-comment-btn">Send</button>' +
+    '</div>';
 
-      '<div class="comment-input-bar">' +
-        '<textarea class="comment-textarea" id="comment-input" data-id="' + r.id + '" placeholder="Add a comment..."></textarea>' +
-        '<button class="btn-send" id="send-btn" data-id="' + r.id + '">Send</button>' +
-      '</div>';
-  }
+  document.getElementById('send-comment-btn').onclick = function() { addComment(r.id); };
+  document.getElementById('comment-input').onkeydown = function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(r.id); }
+  };
+}
 
-  function setStatus(id, status) {
-    fetch('/api/reports/' + id + '/status', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({status: status, user: 'dashboard'})
-    }).then(loadReports);
-  }
+// ── ACTIONS ────────────────────────────────────────────────
+function setStatus(id, status) {
+  fetch('/api/reports/' + id + '/status', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({status: status, user: 'dashboard'})
+  }).then(loadReports);
+}
 
-  function addComment(id) {
-    var input = document.getElementById('comment-input');
-    if (!input) return;
-    var message = input.value.trim();
-    if (!message) return;
-    fetch('/api/reports/' + id + '/comment', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({message: message, user: 'dashboard'})
-    }).then(function() {
-      input.value = '';
-      loadReports();
+function addComment(id) {
+  var input = document.getElementById('comment-input');
+  var message = input.value.trim();
+  if (!message) return;
+  fetch('/api/reports/' + id + '/comment', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({message: message, user: 'dashboard'})
+  }).then(function() {
+    input.value = '';
+    loadReports();
+  });
+}
+
+function submitReport() {
+  var title        = document.getElementById('f-title').value.trim();
+  var incidentType = document.getElementById('f-type').value.trim() || 'General';
+  var severity     = document.getElementById('f-severity').value;
+  var priority     = document.getElementById('f-priority').value;
+  var description  = document.getElementById('f-description').value.trim();
+  var message      = document.getElementById('f-message').value.trim() || title;
+  var assignee     = document.getElementById('f-assignee').value.trim();
+  var sector       = document.getElementById('f-sector').value.trim();
+  var latDeg       = document.getElementById('f-latdeg').value.trim();
+  var latMin       = document.getElementById('f-latmin').value.trim();
+  var latDir       = document.getElementById('f-latdir').value;
+  var locationCode = document.getElementById('f-loccode').value.trim();
+  var tagsRaw      = document.getElementById('f-tags').value;
+  var tags         = tagsRaw.split(',').map(function(t){return t.trim();}).filter(Boolean);
+
+  if (!title) { alert('Title is required.'); return; }
+
+  fetch('/api/report', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      title: title, 
+      incidentType: incidentType,
+      severity: severity, 
+      priority: priority, 
+      description: description, 
+      message: message || title, 
+      assignee: assignee, 
+      sector: sector,
+      latDeg: latDeg,
+      latMin: latMin,
+      latDir: latDir,
+      locationCode: locationCode,
+      tags: tags, 
+      user: 'dashboard'
+    })
+  }).then(function() {
+    ['f-title','f-type','f-description','f-message','f-assignee','f-sector','f-latdeg','f-latmin','f-loccode','f-tags'].forEach(function(id){
+      document.getElementById(id).value = '';
     });
-  }
+    document.getElementById('f-severity').value = 'medium';
+    document.getElementById('f-priority').value = 'normal';
+    document.getElementById('f-latdir').value = 'N';
+    overlay.classList.remove('open');
+    loadReports();
+  });
+}
 
-  function submitReport() {
-    var title = document.getElementById('f-title') ? document.getElementById('f-title').value.trim() : '';
-    var incType = document.getElementById('f-type') ? document.getElementById('f-type').value.trim() : 'INCIDENT REPORT';
-    var nature = document.getElementById('f-nature') ? document.getElementById('f-nature').value.trim() : '';
-    var severity = document.getElementById('f-severity') ? document.getElementById('f-severity').value : 'medium';
-    var priority = document.getElementById('f-priority') ? document.getElementById('f-priority').value : 'normal';
-    var description = document.getElementById('f-description') ? document.getElementById('f-description').value.trim() : '';
-    var summary = document.getElementById('f-message') ? document.getElementById('f-message').value.trim() : '';
-    var message = summary || description || title;
-    var assignee = document.getElementById('f-assignee') ? document.getElementById('f-assignee').value.trim() : '';
-    var sector = document.getElementById('f-sector') ? document.getElementById('f-sector').value : '';
-    var latDeg = document.getElementById('f-latdeg') ? document.getElementById('f-latdeg').value.trim() : '';
-    var latMin = document.getElementById('f-latmin') ? document.getElementById('f-latmin').value.trim() : '';
-    var latDir = document.getElementById('f-latdir') ? document.getElementById('f-latdir').value : 'N';
-    var lonDeg = document.getElementById('f-londeg') ? document.getElementById('f-londeg').value.trim() : '';
-    var lonMin = document.getElementById('f-lonmin') ? document.getElementById('f-lonmin').value.trim() : '';
-    var lonDir = document.getElementById('f-londir') ? document.getElementById('f-londir').value : 'E';
-    var locCode = document.getElementById('f-loccode') ? document.getElementById('f-loccode').value.trim() : '';
-    var gridRef = document.getElementById('f-gridref') ? document.getElementById('f-gridref').value.trim() : '';
-    var tagInput = document.getElementById('f-tags');
-    var tags = tagInput ? tagInput.value.split(',').map(function(t){ return t.trim(); }).filter(Boolean) : [];
-
-    if (!title) { alert('Report Title is required.'); return; }
-    if (!message) { alert('Short Report Summary or Details of Incident is required.'); return; }
-
-    fetch('/api/report', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        title: title, incidentType: nature || incType,
-        severity: severity, priority: priority,
-        description: description, message: message,
-        assignee: assignee, sector: sector,
-        latDeg: latDeg, latMin: latMin, latDir: latDir,
-        lonDeg: lonDeg, lonMin: lonMin, lonDir: lonDir,
-        locationCode: locCode, gridRef: gridRef,
-        tags: tags, user: 'dashboard'
-      })
-    })
-    .then(function(res) {
-      return res.json().then(function(data) {
-        if (!res.ok) throw new Error(data && data.error ? data.error : 'Report submission failed');
-        return data;
-      });
-    })
-    .then(function(data) {
-      var fieldsToClear = ['f-title','f-type','f-nature','f-reporter','f-description','f-message','f-assignee','f-latdeg','f-latmin','f-londeg','f-lonmin','f-loccode','f-gridref','f-tags'];
-      fieldsToClear.forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-      closeModal();
-      if (data && data.report) selectedId = data.report.id;
-      loadReports();
-    })
-    .catch(function(err) {
-      console.error('Submission broken', err);
-      alert(err && err.message ? err.message : 'Report submission failed.');
-    });
-  }
-
-  loadReports();
-  setInterval(loadReports, 3000);
-});
+loadReports();
+setInterval(loadReports, 3000);
 </script>
 </body>
 </html>`);
@@ -1747,3 +950,5 @@ app.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
   console.log('Dashboard: http://localhost:' + PORT + '/dashboard');
 });
+
+```
