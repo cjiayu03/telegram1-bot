@@ -1,20 +1,3 @@
-Ah, the classic string injection breakout strike again!
-
-The `SyntaxError: Unexpected identifier 'is'` means that a stray unescaped single quote or string literal got parsed as live JavaScript code instead of a string token.
-
-If you look at the **Dashboard HTML template string** inside `res.send(...)` around line 219, you'll see this line:
-
-```javascript
-// ❌ THE CULPRIT:
-Incident is now live on the Operational CommandCenter Dashboard.
-
-```
-
-Because that message is nested deep inside a string template *inside* another template literal (`res.send(\`...`)`), Node's parser hits the word `is` right after the breaking template character evaluation and panics because it thinks `is` is a native JavaScript keyword/variable.
-
-Here is the exact complete code file with **all multi-layer string literals safely decoupled and fixed** so Node will compile smoothly on startup:
-
-```javascript
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 
