@@ -1,8 +1,18 @@
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
+const path = require('path');
+const fs = require('fs');
+const axios = require('axios');
 
 const app = express();
 app.use(express.json());
+
+// Ensure the local uploads path directory exists for download storage tracking
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+app.use('/uploads', express.static(uploadDir));
 
 // =========================
 // CONFIG
@@ -28,6 +38,7 @@ let reports = [];
 
 const VALID_SEVERITIES = ['low', 'medium', 'critical'];
 const VALID_STATUSES   = ['OPEN', 'IN_PROGRESS', 'RESOLVED'];
+const VALID_PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 
 function severityEmoji(s) {
   return { low: '🟡', medium: '🟠', critical: '🔴' }[s] || '⚪';
@@ -54,6 +65,26 @@ function incidentKeyboard(id) {
       { text: '✅ Resolve',    callback_data: `status:${id}:RESOLVED` }
     ]]
   };
+}
+
+// Helper to handle async file downloads directly from Telegram CDN resource feeds
+async function downloadTelegramFile(fileId, originalName) {
+  try {
+    const fileInfo = await bot.getFile(fileId);
+    const downloadUrl = `https://api.telegram.org/file/bot${token}/${fileInfo.file_path}`;
+    const filename = `${Date.now()}-${originalName || path.basename(fileInfo.file_path)}`;
+    const localPath = path.join(uploadDir, filename);
+
+    const response = await fetch(downloadUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    await fs.promises.writeFile(localPath, buffer);
+
+    return `/uploads/${filename}`;
+  } catch (err) {
+    console.error('Failed to download file from Telegram:', err.message);
+    return '';
+  }
 }
 
 // =========================
@@ -116,8 +147,9 @@ bot.on('callback_query', async (query) => {
   bot.answerCallbackQuery(query.id);
 });
 
-bot.on('message', (msg) => {
-  const text = msg.text || '';
+bot.on('message', async (msg) => {
+  // Catch text whether it is a normal message or a structural caption attached to an uploaded image/file
+  const text = msg.text || msg.caption || '';
   if (!text || msg.from.is_bot) return;
 
   const chatId = msg.chat.id;
@@ -143,7 +175,7 @@ bot.on('message', (msg) => {
 
   if (text.startsWith('/template')) {
     const exampleTemplate = 
-      `📝 *Copy the template below, paste it, fill it out, and send it back:*\n\n` +
+      `📝 *Copy the template below, paste it, attach your image/file, fill it out, and send it:*\n\n` +
       `\`\`\`\n` +
       `/report\n` +
       `Title: \n` +
@@ -173,7 +205,7 @@ bot.on('message', (msg) => {
 
     const titleText    = getField(/^Title:\s*(.+)$/m, 'Untitled Telegram Report');
     const incidentType = getField(/^Type:\s*(.+)$/m, 'General');
-    const nature       = getField(/^Nature:\s*(.+)$/m, 'Unspecified');
+    const nature       = getField(/^Nature:\s*(.+)$/m, 'Unspecified Outage');
     const severityRaw  = getField(/^Severity:\s*(.+)$/m, 'medium').toLowerCase();
     const sector       = getField(/^Sector:\s*(.+)$/m, 'Unassigned');
     const latDeg       = getField(/^Lat Deg:\s*(\d*)$/m, '');
@@ -185,6 +217,24 @@ bot.on('message', (msg) => {
 
     const severity = VALID_SEVERITIES.includes(severityRaw) ? severityRaw : 'medium';
 
+    // File Processing Block: Intercept media attachments sent via Telegram message blocks
+    let extractedFileId = '';
+    let originalName = '';
+    
+    if (msg.photo && msg.photo.length > 0) {
+      // Pick the highest resolution version available from the photo payload slice array
+      extractedFileId = msg.photo[msg.photo.length - 1].file_id;
+      originalName = 'telegram-image.jpg';
+    } else if (msg.document) {
+      extractedFileId = msg.document.file_id;
+      originalName = msg.document.file_name;
+    }
+
+    let downloadUrlPath = '';
+    if (extractedFileId) {
+      downloadUrlPath = await downloadTelegramFile(extractedFileId, originalName);
+    }
+
     const report = {
       id: Date.now(),
       user: `@${user}`,
@@ -194,6 +244,7 @@ bot.on('message', (msg) => {
       description: description,
       assignee: '',
       tags: ['telegram', 'template'],
+      priority: severity === 'critical' ? 'high' : 'normal',
       status: 'OPEN',
       source: 'telegram',
       time: now(),
@@ -207,15 +258,16 @@ bot.on('message', (msg) => {
       latDir: latDir,
       locationCode: locationCode,
       reportedBy: reportedBy,
-      attachment: ''
+      attachment: downloadUrlPath // Save local storage path endpoint references
     };
 
     reports.unshift(report);
 
     const locStr = formatLocation(report) !== 'N/A' ? `\n📍 *Location*: ${formatLocation(report)}` : '';
+    const attachAlert = downloadUrlPath ? `\n📎 *Media Attached*: Yes (Synced to Dashboard View)` : '';
 
     bot.sendMessage(chatId,
-      `✅ *Incident Synchronized from Template*\n\n` +
+      `✅ *Incident Synchronized from Template*${attachAlert}\n\n` +
       `*ID*: \`${report.id}\`\n` +
       `*Type*: ${incidentType}\n` +
       `*Nature*: ${nature}\n` +
@@ -228,22 +280,22 @@ bot.on('message', (msg) => {
     bot.sendMessage(GROUP_CHAT_ID,
       `🚨 *New Incident* [${report.incidentType.toUpperCase()}]\n\n` +
       `*Title*: ${report.title}\n` +
-      `*Nature*: ${nature}\n` +
       `*ID*: \`${report.id}\`\n` +
       `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}\n` +
       `*Sector*: ${sector}${locStr}\n` +
-      `*Reported By*: ${reportedBy}\n` +
+      `*Reporter*: ${reportedBy}\n` +
       `*Status*: 🆕 OPEN`,
       { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) }
     );
     return;
   }
 
+  // Plain fallback loop execution for casual un-templated text signals inside group monitors
   if (!text.startsWith('/') && String(chatId) === String(GROUP_CHAT_ID)) {
     const report = {
       id: Date.now(), user, severity: 'low', report: text,
       title: text.slice(0, 60), description: '', assignee: '',
-      tags: [], status: 'OPEN',
+      tags: [], priority: 'normal', status: 'OPEN',
       source: 'telegram', time: now(), updatedAt: now(), comments: [],
       incidentType: 'Unspecified', nature: 'Unspecified', sector: 'Unassigned',
       latDeg: '', latMin: '', latDir: 'N', locationCode: '', reportedBy: `@${user}`, attachment: ''
@@ -256,8 +308,6 @@ bot.on('message', (msg) => {
   }
 });
 
-bot.on('polling_error', (err) => console.error('[Telegram polling error]', err.message));
-
 // =========================
 // DASHBOARD → INCIDENTS
 // =========================
@@ -266,9 +316,10 @@ app.post('/api/report', (req, res) => {
   const {
     severity = 'low', message, user = 'dashboard',
     title = '', description = '', assignee = '',
-    tags = [], incidentType = 'General', sector = '',
+    tags = [], priority = 'normal',
+    incidentType = 'General', sector = '',
     latDeg = '', latMin = '', latDir = 'N', locationCode = '',
-    nature = 'General Outage', reportedBy = 'Dashboard Operator', attachment = ''
+    nature = 'General Outage', reportedBy = 'Dashboard Operator'
   } = req.body;
 
   if (!message) return res.status(400).json({ error: 'Message required' });
@@ -279,23 +330,21 @@ app.post('/api/report', (req, res) => {
     title: title || message.slice(0, 60),
     description, assignee,
     tags: Array.isArray(tags) ? tags : [],
-    status: 'OPEN', source: 'dashboard',
+    priority, status: 'OPEN', source: 'dashboard',
     time: now(), updatedAt: now(), comments: [],
     incidentType, sector: sector || 'Unassigned',
     latDeg, latMin, latDir, locationCode,
-    nature, reportedBy, attachment
+    nature, reportedBy, attachment: ''
   };
 
   reports.unshift(report);
 
-  const tagStr = report.tags.length ? `\nTags: ${report.tags.join(', ')}` : '';
   const assignStr = assignee ? `\nAssignee: ${assignee}` : '';
   const sectorStr = report.sector ? `\nSector: ${report.sector}` : '';
   const locStr = formatLocation(report) !== 'N/A' ? `\nLocation: ${formatLocation(report)}` : '';
-  const attachStr = attachment ? `\nAttachment Included: Yes` : '';
 
   bot.sendMessage(GROUP_CHAT_ID,
-    `🚨 *Dashboard Incident* [${report.incidentType.toUpperCase()}]\n\nID: \`${report.id}\`\nTitle: ${report.title}\nNature: ${nature}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nFrom: ${reportedBy}${assignStr}${sectorStr}${locStr}${attachStr}${tagStr}\nStatus: 🆕 OPEN\n\n${message}`,
+    `🚨 *Dashboard Incident* [${report.incidentType.toUpperCase()}]\n\nID: \`${report.id}\`\nTitle: ${report.title}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nPriority: ${priority.toUpperCase()}\nFrom: ${user}${assignStr}${sectorStr}${locStr}\nStatus: 🆕 OPEN\n\n${message}`,
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) });
 
   res.json({ success: true, report });
@@ -306,7 +355,7 @@ app.patch('/api/reports/:id', (req, res) => {
   const report = reports.find(r => String(r.id) === String(id));
   if (!report) return res.status(404).json({ error: 'Incident not found' });
 
-  const allowed = ['title', 'description', 'assignee', 'tags', 'severity', 'incidentType', 'sector', 'latDeg', 'latMin', 'latDir', 'locationCode', 'nature', 'reportedBy', 'attachment'];
+  const allowed = ['title', 'description', 'assignee', 'tags', 'priority', 'severity', 'incidentType', 'sector', 'latDeg', 'latMin', 'latDir', 'locationCode', 'nature', 'reportedBy'];
   allowed.forEach(k => { if (req.body[k] !== undefined) report[k] = req.body[k]; });
   report.updatedAt = now();
   res.json({ success: true, report });
@@ -428,12 +477,18 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 .st-OPEN{background:var(--st-open);color:var(--st-open-t);}
 .st-IN_PROGRESS{background:var(--st-prog);color:var(--st-prog-t);}
 .st-RESOLVED{background:var(--st-res);color:var(--st-res-t);}
+.pri-low{background:#1a2035;color:#94a3b8;}
+.pri-normal{background:#0f2744;color:#60a5fa;}
+.pri-high{background:#2d1f00;color:#fbbf24;}
+.pri-urgent{background:#450a0a;color:#f87171;}
+.src-badge{background:var(--surface2);border:1px solid var(--border2);color:var(--muted);}
 
 .detail-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;}
 .detail-header{padding:18px 24px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
 .detail-title-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px;}
 .detail-title{font-family:'Space Mono',monospace;font-size:17px;font-weight:700;line-height:1.3;flex:1;}
 .detail-id{font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);flex-shrink:0;margin-top:4px;}
+.detail-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
 .meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:12px;}
 .meta-item label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px;}
 .meta-item span{font-size:13px;font-weight:500;}
@@ -579,6 +634,22 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
       </div>
     </div>
 
+    <div class="field-row">
+      <div>
+        <label class="field-label">Priority</label>
+        <select class="field-select" id="f-priority">
+          <option value="low">Low</option>
+          <option value="normal" selected>Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div>
+        <label class="field-label">Sector</label>
+        <input class="field-input" id="f-sector" placeholder="e.g. Sector 4, Alpha, North-Zone">
+      </div>
+    </div>
+
     <div>
       <label class="field-label">Location coordinates & Code</label>
       <div class="geo-row">
@@ -596,23 +667,12 @@ body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);min
 
     <div class="field-row">
       <div>
-        <label class="field-label">Sector</label>
-        <input class="field-input" id="f-sector" placeholder="e.g. Sector 4, Alpha, North-Zone">
-      </div>
-      <div>
         <label class="field-label">Reported By *</label>
         <input class="field-input" id="f-reportedby" placeholder="Your Name / Unit Details">
       </div>
-    </div>
-
-    <div class="field-row">
       <div>
         <label class="field-label">Assignee</label>
         <input class="field-input" id="f-assignee" placeholder="@username">
-      </div>
-      <div>
-        <label class="field-label">Allow Attachment (URL / Path)</label>
-        <input class="field-input" id="f-attachment" placeholder="e.g. logs.txt or screen.png link">
       </div>
     </div>
 
@@ -794,9 +854,18 @@ function renderDetail(r) {
     ? '<div><div class="section-label">Description</div><div class="desc-box">' + esc(r.description) + '</div></div>'
     : '';
 
-  var attachSection = r.attachment
-    ? '<div><div class="section-label">Attachment Asset Reference</div><div class="desc-box" style="font-family:\\\'Space Mono\\\', monospace; color:#60a5fa;">📎 <a href="' + esc(r.attachment) + '" target="_blank" style="color:inherit; text-decoration:underline;">' + esc(r.attachment) + '</a></div></div>'
-    : '';
+  // Dynamic Image View Section: If an attachment exists, render the photo straight into the layout box
+  var attachSection = '';
+  if (r.attachment) {
+    const fileExt = r.attachment.split('.').pop().toLowerCase();
+    const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt);
+    
+    if (isImg) {
+      attachSection = '<div><div class="section-label">Attached Photographic Evidence</div><div class="desc-box" style="text-align:center;"><img src="' + esc(r.attachment) + '" style="max-width:100%; max-height:320px; border-radius:6px; border:1px solid var(--border2);" alt="Evidence"></div></div>';
+    } else {
+      attachSection = '<div><div class="section-label">Attached Document Log</div><div class="desc-box">📎 <a href="' + esc(r.attachment) + '" target="_blank" style="color:var(--accent); text-decoration:underline;">Download Asset Document File</a></div></div>';
+    }
+  }
 
   var assignee = r.assignee ? '@' + esc(r.assignee) : '<span style="color:#4d6278;">Unassigned</span>';
   var coords = formatCoordinates(r) || '<span style="color:#4d6278;">N/A</span>';
@@ -808,18 +877,21 @@ function renderDetail(r) {
         '<div class="detail-title">[' + esc(r.incidentType || 'General') + '] ' + esc(r.title || r.report) + '</div>' +
         '<div class="detail-id">#' + r.id + '</div>' +
       '</div>' +
+      '<div class="detail-badges">' +
+        '<span class="badge sev-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+        '<span class="badge st-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
+        '<span class="badge pri-' + esc(r.priority||'normal') + '">' + esc(r.priority||'normal') + ' priority</span>' +
+        '<span class="badge src-badge">' + esc(r.source) + '</span>' +
+      '</div>' +
       '<div class="meta-grid">' +
         '<div class="meta-item"><label>Type</label><span>' + esc(r.incidentType || 'General') + '</span></div>' +
-        '<div class="meta-item"><label>Nature</label><span>' + esc(r.nature || 'General Outage') + '</span></div>' +
-        '<div class="meta-item"><label>Severity</label><span style="text-transform:uppercase; font-weight:700;">' + esc(r.severity) + '</span></div>' +
-        '<div class="meta-item"><label>Status</label><span style="font-weight:700; color:#60a5fa;">' + r.status.replace('_',' ') + '</span></div>' +
+        '<div class="meta-item"><label>Nature</label><span>' + esc(r.nature || 'Unspecified') + '</span></div>' +
         '<div class="meta-item"><label>Sector</label><span>' + esc(r.sector || 'Unassigned') + '</span></div>' +
         '<div class="meta-item"><label>Coordinates</label><span>' + coords + '</span></div>' +
         '<div class="meta-item"><label>Loc Code</label><span>' + locCode + '</span></div>' +
         '<div class="meta-item"><label>Reported By</label><span>' + esc(r.reportedBy || 'N/A') + '</span></div>' +
         '<div class="meta-item"><label>Assignee</label><span>' + assignee + '</span></div>' +
         '<div class="meta-item"><label>Created</label><span>' + esc(r.time) + '</span></div>' +
-        '<div class="meta-item"><label>Source Feed</label><span style="text-transform:uppercase;">' + esc(r.source) + '</span></div>' +
         '<div class="meta-item"><label>Updated</label><span>' + esc(r.updatedAt || r.time) + '</span></div>' +
       '</div>' +
       '<div class="action-row">' + statusBtns + '</div>' +
@@ -870,14 +942,14 @@ function addComment(id) {
 function submitReport() {
   var title        = document.getElementById('f-title').value.trim();
   var incidentType = document.getElementById('f-type').value.trim() || 'General';
-  var nature       = document.getElementById('f-nature').value.trim() || 'General Outage';
+  var nature       = document.getElementById('f-nature').value.trim() || 'Unspecified';
   var severity     = document.getElementById('f-severity').value;
+  var priority     = document.getElementById('f-priority').value;
   var description  = document.getElementById('f-description').value.trim();
   var message      = document.getElementById('f-message').value.trim() || title;
   var assignee     = document.getElementById('f-assignee').value.trim();
   var sector       = document.getElementById('f-sector').value.trim();
   var reportedBy   = document.getElementById('f-reportedby').value.trim() || 'Dashboard Operator';
-  var attachment   = document.getElementById('f-attachment').value.trim();
   var latDeg       = document.getElementById('f-latdeg').value.trim();
   var latMin       = document.getElementById('f-latmin').value.trim();
   var latDir       = document.getElementById('f-latdir').value;
@@ -895,12 +967,12 @@ function submitReport() {
       incidentType: incidentType,
       nature: nature,
       severity: severity, 
+      priority: priority, 
       description: description, 
       message: message || title, 
       assignee: assignee, 
       sector: sector,
       reportedBy: reportedBy,
-      attachment: attachment,
       latDeg: latDeg,
       latMin: latMin,
       latDir: latDir,
@@ -909,10 +981,11 @@ function submitReport() {
       user: 'dashboard'
     })
   }).then(function() {
-    ['f-title','f-type','f-nature','f-description','f-message','f-assignee','f-sector','f-reportedby','f-attachment','f-latdeg','f-latmin','f-loccode','f-tags'].forEach(function(id){
+    ['f-title','f-type','f-nature','f-description','f-message','f-assignee','f-sector','f-reportedby','f-latdeg','f-latmin','f-loccode','f-tags'].forEach(function(id){
       document.getElementById(id).value = '';
     });
     document.getElementById('f-severity').value = 'medium';
+    document.getElementById('f-priority').value = 'normal';
     document.getElementById('f-latdir').value = 'N';
     overlay.classList.remove('open');
     loadReports();
