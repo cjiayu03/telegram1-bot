@@ -318,23 +318,25 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
 .btn-danger  { background:var(--sev-crit-bg); color:var(--sev-crit); border:1px solid #5a1010; }
 .btn-danger:hover { background:#2a0808; }
 
-/* Cards grid: labels sit outside cards as grid-level headings */
-.cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; padding:16px 20px; overflow-y:auto; flex:1; align-content:start; }
-.cards-grid::-webkit-scrollbar { width:3px; }
-.cards-grid::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
-
-/* Wrapper: label above card */
-.card-wrap { display:flex; flex-direction:column; gap:4px; }
-.card-wrap.full { grid-column:1/-1; }
-.cw-label { font-size:9px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted2); font-weight:600; padding-left:2px; }
-
-.info-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:0; transition:border-color .15s; }
-.info-card:hover { border-color:var(--border2); }
-.ic-val   { font-size:15px; font-weight:600; color:var(--text); line-height:1.3; }
-.ic-val.mono  { font-family:'IBM Plex Mono',monospace; font-size:13px; }
-.ic-val.muted { color:var(--muted2); font-weight:400; font-size:14px; }
-.ic-val.prose { font-size:13px; font-weight:400; line-height:1.65; color:#9ab5cf; }
-.ic-val.small { font-family:'IBM Plex Mono',monospace; font-size:11px; line-height:1.6; color:#9ab5cf; }
+/* Detail view - form field display style */
+.dv-scroll { flex:1; overflow-y:auto; padding:24px 28px; display:flex; flex-direction:column; gap:20px; }
+.dv-scroll::-webkit-scrollbar { width:3px; }
+.dv-scroll::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
+.dv-row { display:grid; gap:14px; }
+.dv-row.col2 { grid-template-columns:1fr 1fr; }
+.dv-row.col3 { grid-template-columns:1fr 1fr 1fr; }
+.dv-row.col1 { grid-template-columns:1fr; }
+.dv-field { display:flex; flex-direction:column; gap:5px; }
+.dv-label { font-size:9px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted2); font-weight:700; }
+.dv-label.req::after { content:' *'; color:var(--sev-crit); }
+.dv-val { background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:10px 14px; font-size:13px; color:var(--text); font-family:'Syne',sans-serif; min-height:40px; display:flex; align-items:center; }
+.dv-val.mono { font-family:'IBM Plex Mono',monospace; font-size:12px; }
+.dv-val.muted { color:var(--muted2); }
+.dv-val.prose { align-items:flex-start; min-height:64px; line-height:1.6; color:#9ab5cf; }
+.dv-section { display:flex; flex-direction:column; gap:14px; }
+.dv-section-head { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-bottom:10px; }
+.dv-section-title { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:7px; }
+.dv-section-title::before { content:''; width:3px; height:14px; background:var(--accent); border-radius:2px; display:inline-block; }
 
 .comment-thread { display:flex; flex-direction:column; gap:8px; }
 .comment-item { display:flex; gap:10px; padding:10px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; }
@@ -452,14 +454,18 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
     return r.latDeg + String.fromCharCode(176) + (r.latMin || '00') + "'" + (r.latDir || 'N');
   }
 
-  // card: label outside, value inside
-  function card(label, valHtml) {
-    return '<div class="card-wrap"><div class="cw-label">' + label + '</div><div class="info-card">' + valHtml + '</div></div>';
+  // form-field display helpers
+  function field(label, value, cls, req) {
+    var lbl = '<div class="dv-label' + (req ? ' req' : '') + '">' + label + '</div>';
+    var v = '<div class="dv-val' + (cls ? ' ' + cls : '') + '">' + esc(value || '—') + '</div>';
+    return '<div class="dv-field">' + lbl + v + '</div>';
   }
-  function cardFull(label, valHtml) {
-    return '<div class="card-wrap full"><div class="cw-label">' + label + '</div><div class="info-card">' + valHtml + '</div></div>';
+  function fieldHtml(label, innerHtml, cls, req) {
+    var lbl = '<div class="dv-label' + (req ? ' req' : '') + '">' + label + '</div>';
+    var v = '<div class="dv-val' + (cls ? ' ' + cls : '') + '">' + innerHtml + '</div>';
+    return '<div class="dv-field">' + lbl + v + '</div>';
   }
-  function val(v, cls) { return '<div class="ic-val' + (cls ? ' ' + cls : '') + '">' + esc(v || '') + '</div>'; }
+  function row(cols, content) { return '<div class="dv-row col' + cols + '">' + content + '</div>'; }
 
   // ── MODAL ──
   var overlay = document.getElementById('overlay');
@@ -548,21 +554,23 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
   function renderDetail(r) {
     var panel = document.getElementById('detail-panel');
 
-    var coordsStr = coords(r) || '<span style="color:var(--muted2)">N/A</span>';
-    var locCodeHtml = r.locationCode ? val(r.locationCode, 'mono') : '<div class="ic-val muted">N/A</div>';
-    var assigneeHtml = r.assignee ? val('@' + r.assignee) : '<div class="ic-val muted">Unassigned</div>';
+    var coordsStr = coords(r) || '—';
+    var locVal = r.locationCode || '—';
+    var assigneeVal = r.assignee ? '@' + r.assignee : 'Unassigned';
 
-    var descCard = r.description ? cardFull('Description', val(r.description, 'prose')) : '';
-
-    var attachCard = '';
+    var attachHtml = '';
     if (r.attachment) {
       var ext = r.attachment.split('.').pop().toLowerCase();
       if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
-        attachCard = '<div class="card-wrap full"><div class="cw-label">Photographic Evidence</div><div class="info-card">' +
-          '<img src="' + esc(r.attachment) + '" style="max-width:100%;max-height:340px;border-radius:7px;border:1px solid var(--border2);" alt="Evidence"></div></div>';
+        attachHtml = '<div class="dv-section">' +
+          '<div class="dv-section-head"><div class="dv-section-title">Photographic Evidence</div></div>' +
+          '<img src="' + esc(r.attachment) + '" style="max-width:100%;max-height:340px;border-radius:7px;border:1px solid var(--border2);" alt="Evidence">' +
+          '</div>';
       } else {
-        attachCard = cardFull('Attached Document',
-          '<a href="' + esc(r.attachment) + '" target="_blank" style="color:var(--accent);font-size:13px;text-decoration:underline;">Download File</a>');
+        attachHtml = '<div class="dv-section">' +
+          '<div class="dv-section-head"><div class="dv-section-title">Attached Document</div></div>' +
+          '<a href="' + esc(r.attachment) + '" target="_blank" style="color:var(--accent);font-size:13px;">Download File</a>' +
+          '</div>';
       }
     }
 
@@ -577,6 +585,13 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
         }).join('')
       : '<div style="color:var(--muted2);font-size:13px;padding:6px 0;">No comments yet.</div>';
 
+    var descHtml = r.description
+      ? '<div class="dv-section">' +
+          '<div class="dv-section-head"><div class="dv-section-title">Description</div></div>' +
+          row(1, field('Details', r.description, 'prose')) +
+        '</div>'
+      : '';
+
     panel.innerHTML =
       '<div class="detail-head">' +
         '<div class="detail-title-row">' +
@@ -590,23 +605,61 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
         '</div>' +
         '<div class="action-row" id="action-row"></div>' +
       '</div>' +
-      '<div class="cards-grid">' +
-        card('Incident Type', val(r.incidentType || 'General')) +
-        card('Nature', val(r.nature || 'Unspecified')) +
-        card('Sector', val(r.sector || 'Unassigned')) +
-        '<div class="card-wrap"><div class="cw-label">Coordinates</div><div class="info-card"><div class="ic-val mono">' + coordsStr + '</div></div></div>' +
-        '<div class="card-wrap"><div class="cw-label">Location Code</div><div class="info-card">' + locCodeHtml + '</div></div>' +
-        card('Reported By', val(r.reportedBy || 'N/A')) +
-        '<div class="card-wrap"><div class="cw-label">Assignee</div><div class="info-card">' + assigneeHtml + '</div></div>' +
-        card('Created', val(r.time, 'small')) +
-        card('Last Updated', val(r.updatedAt || r.time, 'small')) +
-        cardFull('Short Report', val(r.report, 'prose')) +
-        descCard +
-        attachCard +
-        '<div class="card-wrap full"><div class="cw-label">Comments (' + (r.comments || []).length + ')</div>' +
-          '<div class="info-card">' +
+      '<div class="dv-scroll">' +
+
+        // Section 1: Report Info
+        '<div class="dv-section">' +
+          row(2,
+            fieldHtml('Report Title (Auto Generated)', esc(r.title || r.report)) +
+            field('Report Type', r.incidentType || 'General')
+          ) +
+          row(2,
+            field('Report Date & Time', r.time, 'mono') +
+            field('Severity', r.severity)
+          ) +
+          row(2,
+            field('Reported By', r.reportedBy || '—', '', true) +
+            field('Nature of Incident', r.nature || 'Unspecified', '', true)
+          ) +
+          row(2,
+            field('Sector', r.sector || 'Unassigned') +
+            field('Assignee', assigneeVal)
+          ) +
+          row(2,
+            field('Created', r.time, 'mono') +
+            field('Last Updated', r.updatedAt || r.time, 'mono')
+          ) +
+        '</div>' +
+
+        // Section 2: Location
+        '<div class="dv-section">' +
+          '<div class="dv-section-head">' +
+            '<div class="dv-section-title">Location</div>' +
+          '</div>' +
+          '<div class="dv-label" style="margin-bottom:6px;">Latitude</div>' +
+          row(3,
+            field('Lat Deg', r.latDeg || '—', 'mono') +
+            field('Lat Min', r.latMin || '—', 'mono') +
+            field('Lat Dir', r.latDir || 'N', 'mono')
+          ) +
+          row(1, field('Location Code', locVal, '', true)) +
+        '</div>' +
+
+        // Section 3: Short Report
+        '<div class="dv-section">' +
+          '<div class="dv-section-head"><div class="dv-section-title">Short Report</div></div>' +
+          row(1, field('Summary', r.report, 'prose', true)) +
+        '</div>' +
+
+        descHtml +
+        attachHtml +
+
+        // Section 4: Comments
+        '<div class="dv-section">' +
+          '<div class="dv-section-head"><div class="dv-section-title">Comments (' + (r.comments || []).length + ')</div></div>' +
           '<div class="comment-thread">' + comments + '</div>' +
-        '</div></div>' +
+        '</div>' +
+
       '</div>' +
       '<div class="comment-bar">' +
         '<textarea class="comment-input" id="c-input" placeholder="Add a comment… (Enter to send)"></textarea>' +
