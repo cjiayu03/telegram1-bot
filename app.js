@@ -1,4 +1,4 @@
- const TelegramBot = require('node-telegram-bot-api');
+const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -83,7 +83,7 @@ bot.on('callback_query', async (query) => {
         { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: incidentKeyboard(incidentId) });
     } catch (_) {}
     bot.answerCallbackQuery(query.id, { text: `${statusEmoji(newStatus)} Marked ${newStatus}` });
-    bot.sendMessage(GROUP_CHAT_ID, `${statusEmoji(newStatus)} *Status Update*\n\nIncident \`${incidentId}\` → *${newStatus}* by @${user}`, { parse_mode: 'Markdown' });
+    bot.sendMessage(GROUP_CHAT_ID, `${statusEmoji(status)} *Status Update*\n\nIncident \`${incidentId}\` → *${newStatus}* by @${user}`, { parse_mode: 'Markdown' });
     return;
   }
   bot.answerCallbackQuery(query.id);
@@ -327,15 +327,18 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
 .btn-danger  { background:var(--sev-crit-bg); color:var(--sev-crit); border:1px solid #5a1010; }
 .btn-danger:hover { background:#2a0808; }
 
+/* Cards grid: labels sit outside cards as grid-level headings */
 .cards-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; padding:16px 20px; overflow-y:auto; flex:1; align-content:start; }
 .cards-grid::-webkit-scrollbar { width:3px; }
 .cards-grid::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
 
-.info-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:7px; transition:border-color .15s; }
+/* Wrapper: label above card */
+.card-wrap { display:flex; flex-direction:column; gap:4px; }
+.card-wrap.full { grid-column:1/-1; }
+.cw-label { font-size:9px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted2); font-weight:600; padding-left:2px; }
+
+.info-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 16px; display:flex; flex-direction:column; gap:0; transition:border-color .15s; }
 .info-card:hover { border-color:var(--border2); }
-.info-card.full { grid-column:1/-1; }
-.ic-icon  { font-size:16px; color:var(--muted2); line-height:1; }
-.ic-label { font-size:9px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted2); font-weight:600; }
 .ic-val   { font-size:15px; font-weight:600; color:var(--text); line-height:1.3; }
 .ic-val.mono  { font-family:'IBM Plex Mono',monospace; font-size:13px; }
 .ic-val.muted { color:var(--muted2); font-weight:400; font-size:14px; }
@@ -463,11 +466,13 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
     if (!r.latDeg) return null;
     return r.latDeg + String.fromCharCode(176) + (r.latMin || '00') + "'" + (r.latDir || 'N');
   }
-  function card(icon, label, valHtml) {
-    return '<div class="info-card"><div class="ic-icon">' + icon + '</div><div class="ic-label">' + label + '</div>' + valHtml + '</div>';
+
+  // card: label outside, value inside
+  function card(label, valHtml) {
+    return '<div class="card-wrap"><div class="cw-label">' + label + '</div><div class="info-card">' + valHtml + '</div></div>';
   }
-  function cardFull(icon, label, valHtml) {
-    return '<div class="info-card full"><div class="ic-icon">' + icon + '</div><div class="ic-label">' + label + '</div>' + valHtml + '</div>';
+  function cardFull(label, valHtml) {
+    return '<div class="card-wrap full"><div class="cw-label">' + label + '</div><div class="info-card">' + valHtml + '</div></div>';
   }
   function val(v, cls) { return '<div class="ic-val' + (cls ? ' ' + cls : '') + '">' + esc(v || '') + '</div>'; }
 
@@ -575,16 +580,16 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
     var locCodeHtml = r.locationCode ? val(r.locationCode, 'mono') : '<div class="ic-val muted">N/A</div>';
     var assigneeHtml = r.assignee ? val('@' + r.assignee) : '<div class="ic-val muted">Unassigned</div>';
 
-    var descCard = r.description ? cardFull('📄', 'Description', val(r.description, 'prose')) : '';
+    var descCard = r.description ? cardFull('Description', val(r.description, 'prose')) : '';
 
     var attachCard = '';
     if (r.attachment) {
       var ext = r.attachment.split('.').pop().toLowerCase();
       if (['jpg','jpeg','png','gif','webp'].includes(ext)) {
-        attachCard = '<div class="info-card full"><div class="ic-icon">📎</div><div class="ic-label">Photographic Evidence</div>' +
-          '<img src="' + esc(r.attachment) + '" style="max-width:100%;max-height:340px;border-radius:7px;border:1px solid var(--border2);margin-top:6px;" alt="Evidence"></div>';
+        attachCard = '<div class="card-wrap full"><div class="cw-label">Photographic Evidence</div><div class="info-card">' +
+          '<img src="' + esc(r.attachment) + '" style="max-width:100%;max-height:340px;border-radius:7px;border:1px solid var(--border2);" alt="Evidence"></div></div>';
       } else {
-        attachCard = cardFull('📎', 'Attached Document',
+        attachCard = cardFull('Attached Document',
           '<a href="' + esc(r.attachment) + '" target="_blank" style="color:var(--accent);font-size:13px;text-decoration:underline;">Download File</a>');
       }
     }
@@ -614,23 +619,22 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
         '<div class="action-row" id="action-row"></div>' +
       '</div>' +
       '<div class="cards-grid">' +
-        card('🗂', 'Incident Type', val(r.incidentType || 'General')) +
-        card('⚡', 'Nature', val(r.nature || 'Unspecified')) +
-        card('📍', 'Sector', val(r.sector || 'Unassigned')) +
-        '<div class="info-card"><div class="ic-icon">🌐</div><div class="ic-label">Coordinates</div><div class="ic-val mono">' + coordsStr + '</div></div>' +
-        '<div class="info-card"><div class="ic-icon">#</div><div class="ic-label">Location Code</div>' + locCodeHtml + '</div>' +
-        card('👤', 'Reported By', val(r.reportedBy || 'N/A')) +
-        '<div class="info-card"><div class="ic-icon">🎯</div><div class="ic-label">Assignee</div>' + assigneeHtml + '</div>' +
-        card('🕐', 'Created', val(r.time, 'small')) +
-        card('🔄', 'Last Updated', val(r.updatedAt || r.time, 'small')) +
-        cardFull('📋', 'Short Report', val(r.report, 'prose')) +
+        card('Incident Type', val(r.incidentType || 'General')) +
+        card('Nature', val(r.nature || 'Unspecified')) +
+        card('Sector', val(r.sector || 'Unassigned')) +
+        '<div class="card-wrap"><div class="cw-label">Coordinates</div><div class="info-card"><div class="ic-val mono">' + coordsStr + '</div></div></div>' +
+        '<div class="card-wrap"><div class="cw-label">Location Code</div><div class="info-card">' + locCodeHtml + '</div></div>' +
+        card('Reported By', val(r.reportedBy || 'N/A')) +
+        '<div class="card-wrap"><div class="cw-label">Assignee</div><div class="info-card">' + assigneeHtml + '</div></div>' +
+        card('Created', val(r.time, 'small')) +
+        card('Last Updated', val(r.updatedAt || r.time, 'small')) +
+        cardFull('Short Report', val(r.report, 'prose')) +
         descCard +
         attachCard +
-        '<div class="info-card full">' +
-          '<div class="ic-icon">💬</div>' +
-          '<div class="ic-label">Comments (' + (r.comments || []).length + ')</div>' +
-          '<div class="comment-thread" style="margin-top:8px;">' + comments + '</div>' +
-        '</div>' +
+        '<div class="card-wrap full"><div class="cw-label">Comments (' + (r.comments || []).length + ')</div>' +
+          '<div class="info-card">' +
+          '<div class="comment-thread">' + comments + '</div>' +
+        '</div></div>' +
       '</div>' +
       '<div class="comment-bar">' +
         '<textarea class="comment-input" id="c-input" placeholder="Add a comment… (Enter to send)"></textarea>' +
@@ -642,21 +646,21 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
     if (r.status !== 'IN_PROGRESS') {
       var b1 = document.createElement('button');
       b1.className = 'btn btn-warn';
-      b1.textContent = '🔧 In Progress';
+      b1.textContent = 'In Progress';
       b1.addEventListener('click', function () { setStatus(r.id, 'IN_PROGRESS'); });
       actionRow.appendChild(b1);
     }
     if (r.status !== 'RESOLVED') {
       var b2 = document.createElement('button');
       b2.className = 'btn btn-success';
-      b2.textContent = '✅ Resolve';
+      b2.textContent = 'Resolve';
       b2.addEventListener('click', function () { setStatus(r.id, 'RESOLVED'); });
       actionRow.appendChild(b2);
     }
     if (r.status !== 'OPEN') {
       var b3 = document.createElement('button');
       b3.className = 'btn btn-danger';
-      b3.textContent = '🆕 Reopen';
+      b3.textContent = 'Reopen';
       b3.addEventListener('click', function () { setStatus(r.id, 'OPEN'); });
       actionRow.appendChild(b3);
     }
