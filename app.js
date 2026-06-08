@@ -780,7 +780,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
   }
 
   load();
-  setInterval(load, 3000);
+  setInterval(load, 8000);
 })();
 </script>
 </body>
