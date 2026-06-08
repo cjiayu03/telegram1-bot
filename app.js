@@ -334,6 +334,10 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 .dv-val.mono { font-family:'Roboto Mono','Courier New',monospace; font-size:12px; }
 .dv-val.muted { color:var(--muted2); }
 .dv-val.prose { align-items:flex-start; min-height:64px; line-height:1.6; color:#9ab5cf; }
+.dv-input { width:100%; background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:10px 14px; font-size:13px; color:var(--text); font-family:'Inter','Segoe UI',sans-serif; min-height:40px; outline:none; transition:border-color .15s; display:block; }
+.dv-input:focus { border-color:var(--accent); }
+.dv-input.mono { font-family:'Roboto Mono','Courier New',monospace; font-size:12px; }
+.dv-input option { background:var(--surface2); }
 .dv-section { display:flex; flex-direction:column; gap:14px; }
 .dv-section-head { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-bottom:10px; }
 .dv-section-title { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:7px; }
@@ -352,17 +356,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 
 .empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--muted2); }
 
-#overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.8); align-items:center; justify-content:center; z-index:9999; padding:20px; }
-#overlay.open { display:flex; }
-.modal { background:var(--surface); border:1px solid var(--border2); border-radius:14px; width:100%; max-width:580px; padding:24px; display:flex; flex-direction:column; gap:13px; max-height:92vh; overflow-y:auto; }
-.modal-title { font-family:'Roboto Mono',monospace; font-size:14px; font-weight:600; letter-spacing:.06em; }
-.fl { display:block; font-size:10px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted2); margin-bottom:3px; }
-.fi,.fs,.ft { width:100%; background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:9px 12px; color:var(--text); font-family:'Inter','Segoe UI',sans-serif; font-size:13px; outline:none; transition:border-color .15s; }
-.fi:focus,.fs:focus,.ft:focus { border-color:var(--accent); }
-.ft { resize:vertical; min-height:68px; }
-.f2 { display:grid; grid-template-columns:1fr 1fr; gap:11px; }
-.f4 { display:grid; grid-template-columns:1.5fr 1.5fr 1fr 2fr; gap:8px; }
-.modal-foot { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
+
 </style>
 </head>
 <body>
@@ -401,46 +395,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
   </div>
 </div>
 
-<div id="overlay">
-  <div class="modal">
-    <div class="modal-title">// NEW INCIDENT</div>
-    <div class="f2">
-      <div><label class="fl">Title *</label><input class="fi" id="f-title" placeholder="Short descriptive title"></div>
-      <div><label class="fl">Incident Type</label><input class="fi" id="f-type" placeholder="Outage, Cyber, Leak…"></div>
-    </div>
-    <div class="f2">
-      <div><label class="fl">Nature of Incident</label><input class="fi" id="f-nature" placeholder="Fiber Cut, Power Drop…"></div>
-      <div><label class="fl">Severity</label>
-        <select class="fs" id="f-sev"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="critical">Critical</option></select>
-      </div>
-    </div>
-    <div class="f2">
-      <div><label class="fl">Sector</label><input class="fi" id="f-sector" placeholder="Sector 4, Alpha, North-Zone"></div>
-      <div><label class="fl">Priority</label>
-        <select class="fs" id="f-pri"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select>
-      </div>
-    </div>
-    <div>
-      <label class="fl">Location Coordinates &amp; Code</label>
-      <div class="f4">
-        <input class="fi" id="f-latdeg" type="number" placeholder="Lat Deg °">
-        <input class="fi" id="f-latmin" type="number" placeholder="Lat Min '">
-        <select class="fs" id="f-latdir"><option value="N">N</option><option value="S">S</option><option value="E">E</option><option value="W">W</option></select>
-        <input class="fi" id="f-loccode" placeholder="Location Code">
-      </div>
-    </div>
-    <div class="f2">
-      <div><label class="fl">Reported By *</label><input class="fi" id="f-reportedby" placeholder="Name / Unit"></div>
-      <div><label class="fl">Assignee</label><input class="fi" id="f-assignee" placeholder="@username"></div>
-    </div>
-    <div><label class="fl">Description</label><textarea class="ft" id="f-desc" placeholder="What happened? Impact, context…"></textarea></div>
-    <div><label class="fl">Short Report * (sent to Telegram)</label><input class="fi" id="f-msg" placeholder="One-line summary"></div>
-    <div class="modal-foot">
-      <button class="btn btn-ghost" id="cancel-btn">Cancel</button>
-      <button class="btn btn-primary" id="submit-btn">Create Incident</button>
-    </div>
-  </div>
-</div>
+
 
 <script>
 (function () {
@@ -468,16 +423,12 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
   }
   function row(cols, content) { return '<div class="dv-row col' + cols + '">' + content + '</div>'; }
 
-  // ── MODAL ──
-  var overlay = document.getElementById('overlay');
+  // ── NEW INCIDENT BUTTON ──
   document.getElementById('new-btn').addEventListener('click', function () {
-    overlay.classList.add('open');
-    document.getElementById('f-title').focus();
+    selectedId = null;
+    renderList();
+    renderNewForm();
   });
-  document.getElementById('cancel-btn').addEventListener('click', function () { overlay.classList.remove('open'); });
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.classList.remove('open'); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') overlay.classList.remove('open'); });
-  document.getElementById('submit-btn').addEventListener('click', submitReport);
 
   // ── LOAD ──
   function load() {
@@ -716,36 +667,116 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
   }
 
   function submitReport() {
-    var title = document.getElementById('f-title').value.trim();
-    if (!title) { alert('Title is required.'); return; }
+    var title = document.getElementById('nf-title').value.trim();
+    if (!title) { document.getElementById('nf-title').focus(); return; }
     var body = {
       title: title,
-      incidentType: document.getElementById('f-type').value.trim() || 'General',
-      nature:       document.getElementById('f-nature').value.trim() || 'Unspecified',
-      severity:     document.getElementById('f-sev').value,
-      priority:     document.getElementById('f-pri').value,
-      sector:       document.getElementById('f-sector').value.trim(),
-      latDeg:       document.getElementById('f-latdeg').value.trim(),
-      latMin:       document.getElementById('f-latmin').value.trim(),
-      latDir:       document.getElementById('f-latdir').value,
-      locationCode: document.getElementById('f-loccode').value.trim(),
-      reportedBy:   document.getElementById('f-reportedby').value.trim() || 'Dashboard Operator',
-      assignee:     document.getElementById('f-assignee').value.trim(),
-      description:  document.getElementById('f-desc').value.trim(),
-      message:      document.getElementById('f-msg').value.trim() || title,
+      incidentType: document.getElementById('nf-type').value.trim() || 'General',
+      nature:       document.getElementById('nf-nature').value.trim() || 'Unspecified',
+      severity:     document.getElementById('nf-sev').value,
+      priority:     document.getElementById('nf-pri').value,
+      sector:       document.getElementById('nf-sector').value.trim(),
+      latDeg:       document.getElementById('nf-latdeg').value.trim(),
+      latMin:       document.getElementById('nf-latmin').value.trim(),
+      latDir:       document.getElementById('nf-latdir').value,
+      locationCode: document.getElementById('nf-loccode').value.trim(),
+      reportedBy:   document.getElementById('nf-reportedby').value.trim() || 'Dashboard Operator',
+      assignee:     document.getElementById('nf-assignee').value.trim(),
+      description:  document.getElementById('nf-desc').value.trim(),
+      message:      document.getElementById('nf-msg').value.trim() || title,
       user: 'dashboard'
     };
     fetch('/api/report', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-    }).then(function () {
-      ['f-title','f-type','f-nature','f-sector','f-latdeg','f-latmin','f-loccode','f-reportedby','f-assignee','f-desc','f-msg']
-        .forEach(function (id) { document.getElementById(id).value = ''; });
-      document.getElementById('f-sev').value = 'medium';
-      document.getElementById('f-pri').value = 'normal';
-      document.getElementById('f-latdir').value = 'N';
-      overlay.classList.remove('open');
+    }).then(function (res) { return res.json(); }).then(function (data) {
       load();
+      selectedId = String(data.report.id);
+      renderList();
+      renderDetail(data.report);
     });
+  }
+
+  function renderNewForm() {
+    var panel = document.getElementById('detail-panel');
+    panel.innerHTML =
+      '<div class="detail-head">' +
+        '<div class="detail-title-row">' +
+          '<div class="detail-title">New Incident Report</div>' +
+        '</div>' +
+        '<div class="detail-badges"></div>' +
+        '<div class="action-row" id="action-row"></div>' +
+      '</div>' +
+      '<div class="dv-scroll">' +
+
+        // Section: Report Info
+        '<div class="dv-section">' +
+          '<div class="dv-row col2">' +
+            '<div class="dv-field"><div class="dv-label req">Report Title</div><input class="dv-input" id="nf-title" placeholder="Short descriptive title"></div>' +
+            '<div class="dv-field"><div class="dv-label">Report Type</div><input class="dv-input" id="nf-type" placeholder="Outage, Cyber, Leak…"></div>' +
+          '</div>' +
+          '<div class="dv-row col2">' +
+            '<div class="dv-field"><div class="dv-label req">Nature of Incident</div><input class="dv-input" id="nf-nature" placeholder="Fiber Cut, Power Drop…"></div>' +
+            '<div class="dv-field"><div class="dv-label">Severity</div>' +
+              '<select class="dv-input" id="nf-sev"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="critical">Critical</option></select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="dv-row col2">' +
+            '<div class="dv-field"><div class="dv-label">Sector</div><input class="dv-input" id="nf-sector" placeholder="Sector 4, Alpha, North-Zone"></div>' +
+            '<div class="dv-field"><div class="dv-label">Priority</div>' +
+              '<select class="dv-input" id="nf-pri"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="dv-row col2">' +
+            '<div class="dv-field"><div class="dv-label req">Reported By</div><input class="dv-input" id="nf-reportedby" placeholder="Name / Unit"></div>' +
+            '<div class="dv-field"><div class="dv-label">Assignee</div><input class="dv-input" id="nf-assignee" placeholder="@username"></div>' +
+          '</div>' +
+        '</div>' +
+
+        // Section: Location
+        '<div class="dv-section">' +
+          '<div class="dv-section-head"><div class="dv-section-title">Location</div></div>' +
+          '<div class="dv-label" style="margin-bottom:6px;">Latitude</div>' +
+          '<div class="dv-row col3">' +
+            '<div class="dv-field"><div class="dv-label">Lat Deg</div><input class="dv-input mono" id="nf-latdeg" type="number" placeholder="°"></div>' +
+            '<div class="dv-field"><div class="dv-label">Lat Min</div><input class="dv-input mono" id="nf-latmin" type="number" placeholder="'"></div>' +
+            '<div class="dv-field"><div class="dv-label">Lat Dir</div>' +
+              '<select class="dv-input mono" id="nf-latdir"><option value="N">N</option><option value="S">S</option><option value="E">E</option><option value="W">W</option></select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="dv-row col1">' +
+            '<div class="dv-field"><div class="dv-label req">Location Code</div><input class="dv-input" id="nf-loccode" placeholder="e.g. ACGP"></div>' +
+          '</div>' +
+        '</div>' +
+
+        // Section: Report Content
+        '<div class="dv-section">' +
+          '<div class="dv-section-head"><div class="dv-section-title">Report Content</div></div>' +
+          '<div class="dv-row col1">' +
+            '<div class="dv-field"><div class="dv-label req">Short Report (sent to Telegram)</div><input class="dv-input" id="nf-msg" placeholder="One-line summary"></div>' +
+          '</div>' +
+          '<div class="dv-row col1">' +
+            '<div class="dv-field"><div class="dv-label">Description</div><textarea class="dv-input" id="nf-desc" style="min-height:80px;resize:vertical;" placeholder="What happened? Impact, context…"></textarea></div>' +
+          '</div>' +
+        '</div>' +
+
+      '</div>' +
+      '<div class="comment-bar">' +
+        '<button class="btn btn-ghost" id="nf-cancel">Cancel</button>' +
+        '<button class="btn btn-primary" id="nf-submit">Create Incident</button>' +
+      '</div>';
+
+    document.getElementById('nf-submit').addEventListener('click', submitReport);
+    document.getElementById('nf-cancel').addEventListener('click', function () {
+      selectedId = null;
+      renderList();
+      document.getElementById('detail-panel').innerHTML =
+        '<div class="empty">' +
+          '<div style="font-size:40px;opacity:.2;">⌖</div>' +
+          '<div style="font-size:14px;font-weight:600;">Select an incident</div>' +
+          '<div style="font-size:12px;margin-top:2px;">or create one with + New Incident</div>' +
+        '</div>';
+    });
+    document.getElementById('nf-title').focus();
   }
 
   load();
