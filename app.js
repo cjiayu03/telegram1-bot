@@ -262,17 +262,8 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
 .header-right { display:flex; align-items:center; gap:14px; }
 .ts { font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted2); }
 
-.stats-bar { background:var(--surface); border-bottom:1px solid var(--border); padding:0 24px; display:flex; overflow-x:auto; }
-.stat { padding:12px 22px; border-right:1px solid var(--border); cursor:pointer; min-width:100px; }
-.stat:hover,.stat.active { background:var(--surface2); }
-.stat-n { font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:600; line-height:1; margin-bottom:2px; }
-.stat-l { font-size:10px; color:var(--muted2); text-transform:uppercase; letter-spacing:.1em; }
-.s-crit .stat-n { color:var(--sev-crit); }
-.s-open .stat-n { color:var(--st-open); }
-.s-prog .stat-n { color:var(--st-prog); }
-.s-res  .stat-n { color:var(--st-res); }
 
-.layout { display:flex; height:calc(100vh - 103px); }
+.layout { display:flex; height:calc(100vh - 57px); }
 
 .left-panel { width:300px; min-width:240px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
 .panel-tools { padding:10px; border-bottom:1px solid var(--border); }
@@ -381,12 +372,7 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
   </div>
 </div>
 
-<div class="stats-bar">
-  <div class="stat s-crit" id="st-crit"><div class="stat-n" id="n-crit">0</div><div class="stat-l">Critical</div></div>
-  <div class="stat s-open" id="st-open"><div class="stat-n" id="n-open">0</div><div class="stat-l">Open</div></div>
-  <div class="stat s-prog" id="st-prog"><div class="stat-n" id="n-prog">0</div><div class="stat-l">In Progress</div></div>
-  <div class="stat s-res"  id="st-res" ><div class="stat-n" id="n-res" >0</div><div class="stat-l">Resolved</div></div>
-</div>
+
 
 <div class="layout">
   <div class="left-panel">
@@ -490,10 +476,6 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
   function load() {
     fetch('/api/reports').then(function (r) { return r.json(); }).then(function (data) {
       all = data;
-      document.getElementById('n-crit').textContent = data.filter(function (r) { return r.severity === 'critical'; }).length;
-      document.getElementById('n-open').textContent = data.filter(function (r) { return r.status === 'OPEN'; }).length;
-      document.getElementById('n-prog').textContent = data.filter(function (r) { return r.status === 'IN_PROGRESS'; }).length;
-      document.getElementById('n-res').textContent  = data.filter(function (r) { return r.status === 'RESOLVED'; }).length;
       document.getElementById('ts').textContent     = 'UPDATED ' + new Date().toLocaleTimeString();
       renderList();
       if (selectedId) {
@@ -513,14 +495,6 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
     });
   });
 
-  var statMap = { 'st-crit':'critical', 'st-open':'OPEN', 'st-prog':'IN_PROGRESS', 'st-res':'RESOLVED' };
-  Object.keys(statMap).forEach(function (id) {
-    document.getElementById(id).addEventListener('click', function () {
-      activeFilter = statMap[id];
-      document.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('on', c.dataset.f === activeFilter); });
-      renderList();
-    });
-  });
 
   document.getElementById('search').addEventListener('input', renderList);
 
