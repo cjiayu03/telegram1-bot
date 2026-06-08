@@ -386,7 +386,6 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
   <div class="stat s-open" id="st-open"><div class="stat-n" id="n-open">0</div><div class="stat-l">Open</div></div>
   <div class="stat s-prog" id="st-prog"><div class="stat-n" id="n-prog">0</div><div class="stat-l">In Progress</div></div>
   <div class="stat s-res"  id="st-res" ><div class="stat-n" id="n-res" >0</div><div class="stat-l">Resolved</div></div>
-  <div class="stat"        id="st-all" ><div class="stat-n" id="n-all" >0</div><div class="stat-l">Total</div></div>
 </div>
 
 <div class="layout">
@@ -491,7 +490,6 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
   function load() {
     fetch('/api/reports').then(function (r) { return r.json(); }).then(function (data) {
       all = data;
-      document.getElementById('n-all').textContent  = data.length;
       document.getElementById('n-crit').textContent = data.filter(function (r) { return r.severity === 'critical'; }).length;
       document.getElementById('n-open').textContent = data.filter(function (r) { return r.status === 'OPEN'; }).length;
       document.getElementById('n-prog').textContent = data.filter(function (r) { return r.status === 'IN_PROGRESS'; }).length;
@@ -515,7 +513,7 @@ body { background:var(--bg); font-family:'Syne',sans-serif; color:var(--text); m
     });
   });
 
-  var statMap = { 'st-crit':'critical', 'st-open':'OPEN', 'st-prog':'IN_PROGRESS', 'st-res':'RESOLVED', 'st-all':'' };
+  var statMap = { 'st-crit':'critical', 'st-open':'OPEN', 'st-prog':'IN_PROGRESS', 'st-res':'RESOLVED' };
   Object.keys(statMap).forEach(function (id) {
     document.getElementById(id).addEventListener('click', function () {
       activeFilter = statMap[id];
