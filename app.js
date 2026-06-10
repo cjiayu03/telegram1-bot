@@ -185,9 +185,23 @@ app.post('/api/report', (req, res) => {
     latDeg, latMin, latDir, locationCode, nature, reportedBy, attachment: ''
   };
   reports.unshift(report);
-  const locStr = formatLocation(report) !== 'N/A' ? `\nLocation: ${formatLocation(report)}` : '';
+  const locStr = formatLocation(report) !== 'N/A' ? `\n📍 *Location*: ${formatLocation(report)}${locationCode ? ` \`${locationCode}\`` : ''}` : (locationCode ? `\n📍 *Loc Code*: \`${locationCode}\`` : '');
+  const assigneeStr = assignee ? `\n👤 *Assignee*: @${assignee}` : '';
+  const descStr = description ? `\n\n📋 *Description*:\n${description}` : '';
   bot.sendMessage(GROUP_CHAT_ID,
-    `🚨 *Dashboard Incident* [${incidentType.toUpperCase()}]\n\nID: \`${report.id}\`\nTitle: ${report.title}\nSeverity: ${severityEmoji(severity)} ${severity.toUpperCase()}\nFrom: ${user}${locStr}\nStatus: 🆕 OPEN\n\n${message}`,
+    `🚨 *Dashboard Incident* [${incidentType.toUpperCase()}]\n\n` +
+    `*Title*: ${report.title}\n` +
+    `*ID*: \`${report.id}\`\n` +
+    `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}\n` +
+    `*Priority*: ${priority.toUpperCase()}\n` +
+    `*Nature*: ${nature}\n` +
+    `*Sector*: ${sector || 'Unassigned'}\n` +
+    `*Reporter*: ${reportedBy}\n` +
+    `*Status*: 🆕 OPEN` +
+    locStr +
+    assigneeStr +
+    `\n\n💬 *Report*: ${message}` +
+    descStr,
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) });
   res.json({ success: true, report });
 });
