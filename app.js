@@ -15,7 +15,9 @@ const GROUP_CHAT_ID = process.env.GROUP_CHAT_ID;
 if (!token) throw new Error('Missing TELEGRAM_TOKEN env var');
 if (!GROUP_CHAT_ID) throw new Error('Missing GROUP_CHAT_ID env var');
 
-const bot = new TelegramBot(token, { polling: true });
+// Robust handler for node-telegram-bot-api module export variations
+const BotConstructor = typeof TelegramBot === 'function' ? TelegramBot : TelegramBot.default;
+const bot = new BotConstructor(token, { polling: true });
 let reports = [];
 
 const VALID_SEVERITIES = ['low', 'medium', 'critical'];
@@ -32,9 +34,9 @@ function formatLocation(r) {
 }
 function incidentKeyboard(id) {
   return { inline_keyboard: [[
-    { text: '💬 Ops Log',     callback_data: `opslogs:${id}` },
+    { text: '💬 Ops Log',      callback_data: `opslog:${id}` },
     { text: '🔧 In Progress', callback_data: `status:${id}:IN_PROGRESS` },
-    { text: '✅ Resolve',     callback_data: `status:${id}:RESOLVED` }
+    { text: '✅ Resolve',      callback_data: `status:${id}:RESOLVED` }
   ]]};
 }
 async function downloadTelegramFile(fileId, originalName) {
@@ -59,16 +61,16 @@ bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const msgId  = query.message.message_id;
 
-  if (data.startsWith('opslogs:')) {
+  if (data.startsWith('opslog:')) {
     const incidentId = data.split(':')[1];
     const report = reports.find(r => String(r.id) === String(incidentId));
     if (!report) return bot.answerCallbackQuery(query.id, { text: '❌ Incident not found.' });
     pendingReply[userId] = { incidentId, originMsgId: msgId };
     const prompt = await bot.sendMessage(chatId,
-      `💬 @${user}, type your new ops logfor incident \`${incidentId}\`.\n_(Just send your next message)_`,
+      `💬 @${user}, type your new ops log for incident \`${incidentId}\`.\n_(Just send your next message)_`,
       { parse_mode: 'Markdown', reply_to_message_id: msgId });
     pendingReply[userId].promptMsgId = prompt.message_id;
-    return bot.answerCallbackQuery(query.id, { text: 'Go ahead — type your opslog!' });
+    return bot.answerCallbackQuery(query.id, { text: 'Go ahead — type your log entry!' });
   }
 
   if (data.startsWith('status:')) {
@@ -83,7 +85,7 @@ bot.on('callback_query', async (query) => {
         { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: incidentKeyboard(incidentId) });
     } catch (_) {}
     bot.answerCallbackQuery(query.id, { text: `${statusEmoji(newStatus)} Marked ${newStatus}` });
-    bot.sendMessage(GROUP_CHAT_ID, `${statusEmoji(status)} *Status Update*\n\nIncident \`${incidentId}\` → *${newStatus}* by @${user}`, { parse_mode: 'Markdown' });
+    bot.sendMessage(GROUP_CHAT_ID, `${statusEmoji(newStatus)} *Status Update*\n\nIncident \`${incidentId}\` → *${newStatus}* by @${user}`, { parse_mode: 'Markdown' });
     return;
   }
   bot.answerCallbackQuery(query.id);
@@ -101,16 +103,30 @@ bot.on('message', async (msg) => {
     delete pendingReply[userId];
     const report = reports.find(r => String(r.id) === String(incidentId));
     if (!report) return bot.sendMessage(chatId, `❌ Incident \`${incidentId}\` not found.`, { parse_mode: 'Markdown' });
-    report.opslogs.push({ id: Date.now(), user, message: text, time: now() });
+    report.opsLogs.push({ id: Date.now(), user, message: text, time: now() });
     bot.deleteMessage(chatId, promptMsgId).catch(() => {});
-    bot.sendMessage(GROUP_CHAT_ID, `💬 *New update on "${report.title || incidentId}"*\n\n@${user}: ${text}`,
+    bot.sendMessage(GROUP_CHAT_ID, `💬 *New ops log on "${report.title || incidentId}"*\n\n@${user}: ${text}`,
       { parse_mode: 'Markdown', reply_to_message_id: originMsgId, reply_markup: incidentKeyboard(incidentId) });
     return;
   }
 
   if (text.startsWith('/template')) {
     return bot.sendMessage(chatId,
-      "📝 *Copy the template below, fill it out, and send it:*\n\n```\n/report\nTitle: \nType: General\nNature: \nSeverity: medium\nSector: \nLat Deg: \nLat Min: \nLat Dir: N\nLoc Code: \nReported By: \nDescription: \n```",
+      "📝 *Copy the template below, fill it out, and send it:*\n\n" +
+      "```\n" +
+      "/report\n" +
+      "Title: \n" +
+      "Type: General\n" +
+      "Nature: \n" +
+      "Severity: medium\n" +
+      "Sector: \n" +
+      "Lat Deg: \n" +
+      "Lat Min: \n" +
+      "Lat Dir: N\n" +
+      "Loc Code: \n" +
+      "Reported By: \n" +
+      "Description: \n" +
+      "```",
       { parse_mode: 'Markdown' });
   }
 
@@ -138,7 +154,7 @@ bot.on('message', async (msg) => {
       id: Date.now(), user: `@${user}`, severity, report: titleText,
       title: titleText.slice(0, 60), description, assignee: '',
       priority: severity === 'critical' ? 'high' : 'normal',
-      status: 'OPEN', source: 'telegram', time: now(), updatedAt: now(), opslogs: [],
+      status: 'OPEN', source: 'telegram', time: now(), updatedAt: now(), opsLogs: [],
       incidentType, nature, sector, latDeg, latMin, latDir, locationCode, reportedBy, attachment
     };
     reports.unshift(report);
@@ -157,7 +173,7 @@ bot.on('message', async (msg) => {
       id: Date.now(), user, severity: 'low', report: text,
       title: text.slice(0, 60), description: '', assignee: '',
       priority: 'normal', status: 'OPEN', source: 'telegram',
-      time: now(), updatedAt: now(), opslogs: [],
+      time: now(), updatedAt: now(), opsLogs: [],
       incidentType: 'Unspecified', nature: 'Unspecified', sector: 'Unassigned',
       latDeg: '', latMin: '', latDir: 'N', locationCode: '', reportedBy: `@${user}`, attachment: ''
     };
@@ -180,7 +196,7 @@ app.post('/api/report', (req, res) => {
     id: Date.now(), user, severity, report: message,
     title: title || message.slice(0, 60), description, assignee,
     priority, status: 'OPEN', source: 'dashboard',
-    time: now(), updatedAt: now(), opslogs: [],
+    time: now(), updatedAt: now(), opsLogs: [],
     incidentType, sector: sector || 'Unassigned',
     latDeg, latMin, latDir, locationCode, nature, reportedBy, attachment: ''
   };
@@ -228,18 +244,18 @@ app.post('/api/reports/:id/status', (req, res) => {
   res.json({ success: true, report });
 });
 
-app.post('/api/reports/:id/opslogs', (req, res) => {
+app.post('/api/reports/:id/opslog', (req, res) => {
   const { message, user = 'dashboard' } = req.body;
   if (!message) return res.status(400).json({ error: 'Message required' });
   const report = reports.find(r => String(r.id) === String(req.params.id));
   if (!report) return res.status(404).json({ error: 'Incident not found' });
-  const opslogs= { id: Date.now(), user, message, time: now() };
-  report.opslogs.push(opslogs);
+  const opsLog = { id: Date.now(), user, message, time: now() };
+  report.opsLogs.push(opsLog);
   report.updatedAt = now();
   bot.sendMessage(GROUP_CHAT_ID,
-    `💬 *Opslogs on "${report.title || req.params.id}"*\n\n@${user}: ${message}`,
+    `💬 *Ops Log Update on "${report.title || req.params.id}"*\n\n@${user}: ${message}`,
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(req.params.id) });
-  res.json({ success: true, opslogs });
+  res.json({ success: true, opsLog });
 });
 
 app.get('/api/reports', (req, res) => res.json(reports));
@@ -276,7 +292,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(239,68,68,.5)} 70%{box-shadow:0 0 0 8px rgba(239,68,68,0)} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0)} }
 .header-right { display:flex; align-items:center; gap:14px; }
 .ts { font-family:'Roboto Mono',monospace; font-size:11px; color:var(--muted2); }
-
 
 .layout { display:flex; height:calc(100vh - 57px); }
 
@@ -333,44 +348,18 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 .btn-danger  { background:var(--sev-crit-bg); color:var(--sev-crit); border:1px solid #5a1010; }
 .btn-danger:hover { background:#2a0808; }
 
-/* Detail view - form field display style */
-.dv-scroll { flex:1; overflow-y:auto; padding:24px 28px; display:flex; flex-direction:column; gap:20px; }
-.dv-scroll::-webkit-scrollbar { width:3px; }
-.dv-scroll::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
-.dv-row { display:grid; gap:14px; }
-.dv-row.col2 { grid-template-columns:1fr 1fr; }
-.dv-row.col3 { grid-template-columns:1fr 1fr 1fr; }
-.dv-row.col1 { grid-template-columns:1fr; }
-.dv-field { display:flex; flex-direction:column; gap:5px; }
-.dv-label { font-size:9px; text-transform:uppercase; letter-spacing:.12em; color:var(--muted2); font-weight:700; }
-.dv-label.req::after { content:' *'; color:var(--sev-crit); }
-.dv-val { background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:10px 14px; font-size:13px; color:var(--text); font-family:'Inter','Segoe UI',sans-serif; min-height:40px; display:flex; align-items:center; }
-.dv-val.mono { font-family:'Roboto Mono','Courier New',monospace; font-size:12px; }
-.dv-val.muted { color:var(--muted2); }
-.dv-val.prose { align-items:flex-start; min-height:64px; line-height:1.6; color:#9ab5cf; }
-.dv-input { width:100%; background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:10px 14px; font-size:13px; color:var(--text); font-family:'Inter','Segoe UI',sans-serif; min-height:40px; outline:none; transition:border-color .15s; display:block; }
-.dv-input:focus { border-color:var(--accent); }
-.dv-input.mono { font-family:'Roboto Mono','Courier New',monospace; font-size:12px; }
-.dv-input option { background:var(--surface2); }
-.dv-section { display:flex; flex-direction:column; gap:14px; }
-.dv-section-head { display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-bottom:10px; }
-.dv-section-title { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:7px; }
-.dv-section-title::before { content:''; width:3px; height:14px; background:var(--accent); border-radius:2px; display:inline-block; }
-
-.opslogs-thread { display:flex; flex-direction:column; gap:8px; }
-.opslogs-item { display:flex; gap:10px; padding:10px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; }
+.comment-thread { display:flex; flex-direction:column; gap:8px; }
+.comment-item { display:flex; gap:10px; padding:10px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; }
 .av { width:28px; height:28px; border-radius:50%; background:var(--st-open-bg); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; flex-shrink:0; font-family:'Roboto Mono',monospace; color:var(--st-open); }
 .c-user { font-size:12px; font-weight:600; color:var(--accent); }
 .c-time { font-size:10px; color:var(--muted2); font-family:'Roboto Mono',monospace; }
 .c-text { font-size:13px; line-height:1.5; color:#9ab5cf; margin-top:3px; }
 
-.opslogs-bar { display:flex; gap:8px; padding:12px 20px; border-top:1px solid var(--border); background:var(--surface); flex-shrink:0; }
-.opslogs-input { flex:1; background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:9px 12px; color:var(--text); font-family:'Inter',sans-serif; font-size:13px; outline:none; resize:none; height:38px; transition:border-color .15s,height .15s; }
-.opslogs-input:focus { border-color:var(--accent); height:68px; }
+.comment-bar { display:flex; gap:8px; padding:12px 20px; border-top:1px solid var(--border); background:var(--surface); flex-shrink:0; }
+.comment-input { flex:1; background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:9px 12px; color:var(--text); font-family:'Inter',sans-serif; font-size:13px; outline:none; resize:none; height:38px; transition:border-color .15s,height .15s; }
+.comment-input:focus { border-color:var(--accent); height:68px; }
 
 .empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--muted2); }
-
-
 </style>
 </head>
 <body>
@@ -382,8 +371,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     <button class="btn btn-primary" id="new-btn">+ New Incident</button>
   </div>
 </div>
-
-
 
 <div class="layout">
   <div class="left-panel">
@@ -409,8 +396,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
   </div>
 </div>
 
-
-
 <script>
 (function () {
   var all = [], activeFilter = '', selectedId = null;
@@ -424,7 +409,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     return r.latDeg + String.fromCharCode(176) + (r.latMin || '00') + "'" + (r.latDir || 'N');
   }
 
-  // form-field display helpers
   function field(label, value, cls, req) {
     var lbl = '<div class="dv-label' + (req ? ' req' : '') + '">' + label + '</div>';
     var v = '<div class="dv-val' + (cls ? ' ' + cls : '') + '">' + esc(value || '—') + '</div>';
@@ -437,14 +421,12 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
   }
   function row(cols, content) { return '<div class="dv-row col' + cols + '">' + content + '</div>'; }
 
-  // ── NEW INCIDENT BUTTON ──
   document.getElementById('new-btn').addEventListener('click', function () {
     selectedId = null;
     renderList();
     renderNewForm();
   });
 
-  // ── LOAD ──
   function load() {
     fetch('/api/reports').then(function (r) { return r.json(); }).then(function (data) {
       all = data;
@@ -457,7 +439,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     }).catch(function (e) { console.error(e); });
   }
 
-  // ── FILTER CHIPS ──
   document.querySelectorAll('.chip').forEach(function (c) {
     c.addEventListener('click', function () {
       activeFilter = c.dataset.f;
@@ -467,10 +448,8 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     });
   });
 
-
   document.getElementById('search').addEventListener('input', renderList);
 
-  // ── RENDER LIST ──
   function renderList() {
     var q = (document.getElementById('search').value || '').toLowerCase();
     var list = all.filter(function (r) {
@@ -506,7 +485,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     }).join('');
   }
 
-  // Event delegation for incident list clicks
   document.getElementById('inc-list').addEventListener('click', function (e) {
     var card = e.target.closest('[data-id]');
     if (!card) return;
@@ -516,10 +494,8 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     if (r) renderDetail(r);
   });
 
-  // ── RENDER DETAIL ──
   function renderDetail(r) {
     var panel = document.getElementById('detail-panel');
-
     var coordsStr = coords(r) || '—';
     var locVal = r.locationCode || '—';
     var assigneeVal = r.assignee ? '@' + r.assignee : 'Unassigned';
@@ -540,16 +516,16 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       }
     }
 
-    var opslogs = (r.opslogs || []).length
-      ? r.opslogs.map(function (c) {
-          return '<div class="opslogs-item">' +
+    var opsLogsHtml = (r.opsLogs || []).length
+      ? r.opsLogs.map(function (c) {
+          return '<div class="comment-item">' +
             '<div class="av">' + ini(c.user) + '</div>' +
             '<div style="flex:1"><div style="display:flex;gap:8px;align-items:center;">' +
               '<span class="c-user">@' + esc(c.user) + '</span>' +
               '<span class="c-time">' + esc(c.time) + '</span></div>' +
             '<div class="c-text">' + esc(c.message) + '</div></div></div>';
         }).join('')
-      : '<div style="color:var(--muted2);font-size:13px;padding:6px 0;">No opslogs yet.</div>';
+      : '<div style="color:var(--muted2);font-size:13px;padding:6px 0;">No logs recorded yet.</div>';
 
     var descHtml = r.description
       ? '<div class="dv-section">' +
@@ -573,7 +549,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       '</div>' +
       '<div class="dv-scroll">' +
 
-        // Section 1: Report Info
         '<div class="dv-section">' +
           row(2,
             fieldHtml('Report Title (Auto Generated)', esc(r.title || r.report)) +
@@ -597,7 +572,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           ) +
         '</div>' +
 
-        // Section 2: Location
         '<div class="dv-section">' +
           '<div class="dv-section-head">' +
             '<div class="dv-section-title">Location</div>' +
@@ -611,7 +585,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           row(1, field('Location Code', locVal, '', true)) +
         '</div>' +
 
-        // Section 3: Short Report
         '<div class="dv-section">' +
           '<div class="dv-section-head"><div class="dv-section-title">Short Report</div></div>' +
           row(1, field('Summary', r.report, 'prose', true)) +
@@ -620,19 +593,17 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
         descHtml +
         attachHtml +
 
-        // Section 4: Comments
         '<div class="dv-section">' +
-          '<div class="dv-section-head"><div class="dv-section-title">Ops Log (' + (r.opslogs || []).length + ')</div></div>' +
-          '<div class="opslogs-thread">' + opslogs + '</div>' +
+          '<div class="dv-section-head"><div class="dv-section-title">Ops Log (' + (r.opsLogs || []).length + ')</div></div>' +
+          '<div class="comment-thread">' + opsLogsHtml + '</div>' +
         '</div>' +
 
       '</div>' +
-      '<div class="opslogs-bar">' +
-        '<textarea class="opslogs-input" id="c-input" placeholder="Add new ops log… (Enter to send)"></textarea>' +
+      '<div class="comment-bar">' +
+        '<textarea class="comment-input" id="c-input" placeholder="Add new ops log… (Enter to send)"></textarea>' +
         '<button class="btn btn-primary" id="c-send">Send</button>' +
-      '</div>';
+      }</div>';
 
-    // Build action buttons with proper event listeners (no inline onclick)
     var actionRow = document.getElementById('action-row');
     if (r.status !== 'IN_PROGRESS') {
       var b1 = document.createElement('button');
@@ -656,13 +627,12 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       actionRow.appendChild(b3);
     }
 
-    document.getElementById('c-send').addEventListener('click', function () { addopslogs(r.id); });
+    document.getElementById('c-send').addEventListener('click', function () { addOpsLog(r.id); });
     document.getElementById('c-input').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addopslogs(r.id); }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addOpsLog(r.id); }
     });
   }
 
-  // ── ACTIONS ──
   function setStatus(id, status) {
     fetch('/api/reports/' + id + '/status', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -670,11 +640,11 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     }).then(load);
   }
 
-  function addopslogs(id) {
+  function addOpsLog(id) {
     var input = document.getElementById('c-input');
     var msg = input.value.trim();
     if (!msg) return;
-    fetch('/api/reports/' + id + '/opslogs', {
+    fetch('/api/reports/' + id + '/opslog', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: msg, user: 'dashboard' })
     }).then(function () { input.value = ''; load(); });
@@ -722,7 +692,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       '</div>' +
       '<div class="dv-scroll">' +
 
-        // Section: Report Info
         '<div class="dv-section">' +
           '<div class="dv-row col2">' +
             '<div class="dv-field"><div class="dv-label req">Report Title</div><input class="dv-input" id="nf-title" placeholder="Short descriptive title"></div>' +
@@ -746,13 +715,12 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           '</div>' +
         '</div>' +
 
-        // Section: Location
         '<div class="dv-section">' +
           '<div class="dv-section-head"><div class="dv-section-title">Location</div></div>' +
           '<div class="dv-label" style="margin-bottom:6px;">Latitude</div>' +
           '<div class="dv-row col3">' +
             '<div class="dv-field"><div class="dv-label">Lat Deg</div><input class="dv-input mono" id="nf-latdeg" type="number" placeholder="°"></div>' +
-            '<div class="dv-field"><div class="dv-label">Lat Min</div><input class="dv-input mono" id="nf-latmin" type="number" placeholder="\"></div>' +
+            '<div class="dv-field"><div class="dv-label">Lat Min</div><input class="dv-input mono" id="nf-latmin" type="number" placeholder="\'"></div>' +
             '<div class="dv-field"><div class="dv-label">Lat Dir</div>' +
               '<select class="dv-input mono" id="nf-latdir"><option value="N">N</option><option value="S">S</option><option value="E">E</option><option value="W">W</option></select>' +
             '</div>' +
@@ -762,7 +730,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           '</div>' +
         '</div>' +
 
-        // Section: Report Content
         '<div class="dv-section">' +
           '<div class="dv-section-head"><div class="dv-section-title">Report Content</div></div>' +
           '<div class="dv-row col1">' +
@@ -774,7 +741,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
         '</div>' +
 
       '</div>' +
-      '<div class="opslogs-bar">' +
+      '<div class="comment-bar">' +
         '<button class="btn btn-ghost" id="nf-cancel">Cancel</button>' +
         '<button class="btn btn-primary" id="nf-submit">Create Incident</button>' +
       '</div>';
