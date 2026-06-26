@@ -33,11 +33,21 @@ function formatLocation(r) {
 }
 function incidentKeyboard(id) {
   return { inline_keyboard: [[
-    { text: '💬 Comment',     callback_data: `comment:${id}` },
+    { text: '📋 Ops Log',     callback_data: `opslog:${id}` },
     { text: '🔧 In Progress', callback_data: `status:${id}:IN_PROGRESS` },
     { text: '✅ Resolve',     callback_data: `status:${id}:RESOLVED` }
   ]]};
 }
+function formatOpsLog(report, incidentId) {
+  const title = report.title || incidentId;
+  const logs = report.comments;
+  if (!logs || !logs.length) return `📋 *Ops Log — "${title}"*\n\n_No entries yet._`;
+  const entries = logs.map((c, i) =>
+    `${i + 1}. [${c.time}] @${c.user}\n    ${c.message}`
+  ).join('\n\n');
+  return `📋 *Ops Log — "${title}"*\n\`${logs.length} entr${logs.length === 1 ? 'y' : 'ies'}\`\n\n${entries}`;
+}
+
 async function downloadTelegramFile(fileId, originalName) {
   try {
     const fileInfo = await bot.getFile(fileId);
@@ -60,16 +70,16 @@ bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const msgId  = query.message.message_id;
 
-  if (data.startsWith('comment:')) {
+  if (data.startsWith('opslog:')) {
     const incidentId = data.split(':')[1];
     const report = reports.find(r => String(r.id) === String(incidentId));
     if (!report) return bot.answerCallbackQuery(query.id, { text: '❌ Incident not found.' });
     pendingReply[userId] = { incidentId, originMsgId: msgId };
     const prompt = await bot.sendMessage(chatId,
-      `💬 @${user}, type your comment for incident \`${incidentId}\`.\n_(Just send your next message)_`,
+      `💬 @${user}, add an ops log for incident \`${incidentId}\`.\n_(Just send your next message)_`,
       { parse_mode: 'Markdown', reply_to_message_id: msgId });
     pendingReply[userId].promptMsgId = prompt.message_id;
-    return bot.answerCallbackQuery(query.id, { text: 'Go ahead — type your comment!' });
+    return bot.answerCallbackQuery(query.id, { text: 'Go ahead — type your ops log!' });
   }
 
   if (data.startsWith('status:')) {
@@ -105,7 +115,7 @@ bot.on('message', async (msg) => {
     if (!report) return bot.sendMessage(chatId, `❌ Incident \`${incidentId}\` not found.`, { parse_mode: 'Markdown' });
     report.comments.push({ id: Date.now(), user, message: text, time: now() });
     bot.deleteMessage(chatId, promptMsgId).catch(() => {});
-    bot.sendMessage(GROUP_CHAT_ID, `💬 *Comment on "${report.title || incidentId}"*\n\n@${user}: ${text}`,
+    bot.sendMessage(GROUP_CHAT_ID, formatOpsLog(report, incidentId),
       { parse_mode: 'Markdown', reply_to_message_id: originMsgId, reply_markup: incidentKeyboard(incidentId) });
     return;
   }
@@ -238,8 +248,7 @@ app.post('/api/reports/:id/comment', (req, res) => {
   const comment = { id: Date.now(), user, message, time: now() };
   report.comments.push(comment);
   report.updatedAt = now();
-  bot.sendMessage(GROUP_CHAT_ID,
-    `💬 *Comment on "${report.title || req.params.id}"*\n\n@${user}: ${message}`,
+  bot.sendMessage(GROUP_CHAT_ID, formatOpsLog(report, req.params.id),
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(req.params.id) });
   res.json({ success: true, comment });
 });
@@ -530,7 +539,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
               '<span class="c-time">' + esc(c.time) + '</span></div>' +
             '<div class="c-text">' + esc(c.message) + '</div></div></div>';
         }).join('')
-      : '<div style="color:var(--muted2);font-size:13px;padding:6px 0;">No comments yet.</div>';
+      : '<div style="color:var(--muted2);font-size:13px;padding:6px 0;">No ops logs yet.</div>';
 
     var descHtml = r.description
       ? '<div class="dv-section">' +
@@ -597,14 +606,14 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
         attachHtml +
 
         '<div class="dv-section">' +
-          '<div class="dv-section-head"><div class="dv-section-title">Comments (' + (r.comments || []).length + ')</div></div>' +
+          '<div class="dv-section-head"><div class="dv-section-title">Ops Logs (' + (r.comments || []).length + ')</div></div>' +
           '<div class="comment-thread">' + comments + '</div>' +
         '</div>' +
 
       '</div>' +
       '<div class="comment-bar">' +
-        '<textarea class="comment-input" id="c-input" placeholder="Add a comment… (Enter to send)"></textarea>' +
-        '<button class="btn btn-primary" id="c-send">Send</button>' +
+        '<textarea class="comment-input" id="c-input" placeholder="Add an ops log… (Enter to send)"></textarea>' +
+        '<button class="btn btn-primary" id="c-send">Log</button>' +
       '</div>';
 
     var actionRow = document.getElementById('action-row');
@@ -723,7 +732,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           '<div class="dv-label" style="margin-bottom:6px;">Latitude</div>' +
           '<div class="dv-row col3">' +
             '<div class="dv-field"><div class="dv-label">Lat Deg</div><input class="dv-input mono" id="nf-latdeg" type="number" placeholder="°"></div>' +
-            '<div class="dv-field"><div class="dv-label">Lat Min</div><input class="dv-input mono" id="nf-latmin" type="number" placeholder="\"></div>' +
+            '<div class="dv-field"><div class="dv-label">Lat Min</div><input class="dv-input mono" id="nf-latmin" type="number" placeholder="\'"></div>' +
             '<div class="dv-field"><div class="dv-label">Lat Dir</div>' +
               '<select class="dv-input mono" id="nf-latdir"><option value="N">N</option><option value="S">S</option><option value="E">E</option><option value="W">W</option></select>' +
             '</div>' +
