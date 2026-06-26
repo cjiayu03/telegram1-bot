@@ -254,7 +254,7 @@ app.post('/api/reports/:id/opslog', (req, res) => {
   report.updatedAt = now();
   bot.sendMessage(GROUP_CHAT_ID,
     `💬 *Ops Log Update on "${report.title || req.params.id}"*\n\n@${user}: ${message}`,
-    { parse_mode: 'Markdown', reply_markup: incidentKeyboard(req.params.id) });
+    { parse_mode: 'Markdown', reply_markup: incidentKeyboard(report.id) });
   res.json({ success: true, opsLog });
 });
 
@@ -602,7 +602,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       '<div class="comment-bar">' +
         '<textarea class="comment-input" id="c-input" placeholder="Add new ops log… (Enter to send)"></textarea>' +
         '<button class="btn btn-primary" id="c-send">Send</button>' +
-      </div>';
+      '</div>'; // Corrected syntax error here: changed from '}</div>' to closing div and quotes
 
     var actionRow = document.getElementById('action-row');
     if (r.status !== 'IN_PROGRESS') {
