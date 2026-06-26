@@ -32,7 +32,7 @@ function formatLocation(r) {
 }
 function incidentKeyboard(id) {
   return { inline_keyboard: [[
-    { text: '💬 Ops Log',     callback_data: `comment:${id}` },
+    { text: '💬 Ops Log',     callback_data: `opslogs:${id}` },
     { text: '🔧 In Progress', callback_data: `status:${id}:IN_PROGRESS` },
     { text: '✅ Resolve',     callback_data: `status:${id}:RESOLVED` }
   ]]};
@@ -59,7 +59,7 @@ bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const msgId  = query.message.message_id;
 
-  if (data.startsWith('comment:')) {
+  if (data.startsWith('opslogs:')) {
     const incidentId = data.split(':')[1];
     const report = reports.find(r => String(r.id) === String(incidentId));
     if (!report) return bot.answerCallbackQuery(query.id, { text: '❌ Incident not found.' });
@@ -68,7 +68,7 @@ bot.on('callback_query', async (query) => {
       `💬 @${user}, type your new ops logfor incident \`${incidentId}\`.\n_(Just send your next message)_`,
       { parse_mode: 'Markdown', reply_to_message_id: msgId });
     pendingReply[userId].promptMsgId = prompt.message_id;
-    return bot.answerCallbackQuery(query.id, { text: 'Go ahead — type your comment!' });
+    return bot.answerCallbackQuery(query.id, { text: 'Go ahead — type your opslog!' });
   }
 
   if (data.startsWith('status:')) {
@@ -101,7 +101,7 @@ bot.on('message', async (msg) => {
     delete pendingReply[userId];
     const report = reports.find(r => String(r.id) === String(incidentId));
     if (!report) return bot.sendMessage(chatId, `❌ Incident \`${incidentId}\` not found.`, { parse_mode: 'Markdown' });
-    report.comments.push({ id: Date.now(), user, message: text, time: now() });
+    report.opslogs.push({ id: Date.now(), user, message: text, time: now() });
     bot.deleteMessage(chatId, promptMsgId).catch(() => {});
     bot.sendMessage(GROUP_CHAT_ID, `💬 *New update on "${report.title || incidentId}"*\n\n@${user}: ${text}`,
       { parse_mode: 'Markdown', reply_to_message_id: originMsgId, reply_markup: incidentKeyboard(incidentId) });
@@ -138,7 +138,7 @@ bot.on('message', async (msg) => {
       id: Date.now(), user: `@${user}`, severity, report: titleText,
       title: titleText.slice(0, 60), description, assignee: '',
       priority: severity === 'critical' ? 'high' : 'normal',
-      status: 'OPEN', source: 'telegram', time: now(), updatedAt: now(), comments: [],
+      status: 'OPEN', source: 'telegram', time: now(), updatedAt: now(), opslogs: [],
       incidentType, nature, sector, latDeg, latMin, latDir, locationCode, reportedBy, attachment
     };
     reports.unshift(report);
@@ -157,7 +157,7 @@ bot.on('message', async (msg) => {
       id: Date.now(), user, severity: 'low', report: text,
       title: text.slice(0, 60), description: '', assignee: '',
       priority: 'normal', status: 'OPEN', source: 'telegram',
-      time: now(), updatedAt: now(), comments: [],
+      time: now(), updatedAt: now(), opslogs: [],
       incidentType: 'Unspecified', nature: 'Unspecified', sector: 'Unassigned',
       latDeg: '', latMin: '', latDir: 'N', locationCode: '', reportedBy: `@${user}`, attachment: ''
     };
@@ -180,7 +180,7 @@ app.post('/api/report', (req, res) => {
     id: Date.now(), user, severity, report: message,
     title: title || message.slice(0, 60), description, assignee,
     priority, status: 'OPEN', source: 'dashboard',
-    time: now(), updatedAt: now(), comments: [],
+    time: now(), updatedAt: now(), opslogs: [],
     incidentType, sector: sector || 'Unassigned',
     latDeg, latMin, latDir, locationCode, nature, reportedBy, attachment: ''
   };
@@ -228,18 +228,18 @@ app.post('/api/reports/:id/status', (req, res) => {
   res.json({ success: true, report });
 });
 
-app.post('/api/reports/:id/comment', (req, res) => {
+app.post('/api/reports/:id/opslogs', (req, res) => {
   const { message, user = 'dashboard' } = req.body;
   if (!message) return res.status(400).json({ error: 'Message required' });
   const report = reports.find(r => String(r.id) === String(req.params.id));
   if (!report) return res.status(404).json({ error: 'Incident not found' });
-  const comment = { id: Date.now(), user, message, time: now() };
-  report.comments.push(comment);
+  const opslogs= { id: Date.now(), user, message, time: now() };
+  report.opslogs.push(opslogs);
   report.updatedAt = now();
   bot.sendMessage(GROUP_CHAT_ID,
-    `💬 *Comment on "${report.title || req.params.id}"*\n\n@${user}: ${message}`,
+    `💬 *Opslogs on "${report.title || req.params.id}"*\n\n@${user}: ${message}`,
     { parse_mode: 'Markdown', reply_markup: incidentKeyboard(req.params.id) });
-  res.json({ success: true, comment });
+  res.json({ success: true, opslogs });
 });
 
 app.get('/api/reports', (req, res) => res.json(reports));
@@ -357,16 +357,16 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 .dv-section-title { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text); display:flex; align-items:center; gap:7px; }
 .dv-section-title::before { content:''; width:3px; height:14px; background:var(--accent); border-radius:2px; display:inline-block; }
 
-.comment-thread { display:flex; flex-direction:column; gap:8px; }
-.comment-item { display:flex; gap:10px; padding:10px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; }
+.opslogs-thread { display:flex; flex-direction:column; gap:8px; }
+.opslogs-item { display:flex; gap:10px; padding:10px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; }
 .av { width:28px; height:28px; border-radius:50%; background:var(--st-open-bg); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; flex-shrink:0; font-family:'Roboto Mono',monospace; color:var(--st-open); }
 .c-user { font-size:12px; font-weight:600; color:var(--accent); }
 .c-time { font-size:10px; color:var(--muted2); font-family:'Roboto Mono',monospace; }
 .c-text { font-size:13px; line-height:1.5; color:#9ab5cf; margin-top:3px; }
 
-.comment-bar { display:flex; gap:8px; padding:12px 20px; border-top:1px solid var(--border); background:var(--surface); flex-shrink:0; }
-.comment-input { flex:1; background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:9px 12px; color:var(--text); font-family:'Inter',sans-serif; font-size:13px; outline:none; resize:none; height:38px; transition:border-color .15s,height .15s; }
-.comment-input:focus { border-color:var(--accent); height:68px; }
+.opslogs-bar { display:flex; gap:8px; padding:12px 20px; border-top:1px solid var(--border); background:var(--surface); flex-shrink:0; }
+.opslogs-input { flex:1; background:var(--surface2); border:1px solid var(--border2); border-radius:7px; padding:9px 12px; color:var(--text); font-family:'Inter',sans-serif; font-size:13px; outline:none; resize:none; height:38px; transition:border-color .15s,height .15s; }
+.opslogs-input:focus { border-color:var(--accent); height:68px; }
 
 .empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--muted2); }
 
@@ -540,16 +540,16 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       }
     }
 
-    var comments = (r.comments || []).length
-      ? r.comments.map(function (c) {
-          return '<div class="comment-item">' +
+    var opslogs = (r.opslogs || []).length
+      ? r.opslogs.map(function (c) {
+          return '<div class="opslogs-item">' +
             '<div class="av">' + ini(c.user) + '</div>' +
             '<div style="flex:1"><div style="display:flex;gap:8px;align-items:center;">' +
               '<span class="c-user">@' + esc(c.user) + '</span>' +
               '<span class="c-time">' + esc(c.time) + '</span></div>' +
             '<div class="c-text">' + esc(c.message) + '</div></div></div>';
         }).join('')
-      : '<div style="color:var(--muted2);font-size:13px;padding:6px 0;">No comments yet.</div>';
+      : '<div style="color:var(--muted2);font-size:13px;padding:6px 0;">No opslogs yet.</div>';
 
     var descHtml = r.description
       ? '<div class="dv-section">' +
@@ -622,13 +622,13 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 
         // Section 4: Comments
         '<div class="dv-section">' +
-          '<div class="dv-section-head"><div class="dv-section-title">Ops Log (' + (r.comments || []).length + ')</div></div>' +
-          '<div class="comment-thread">' + comments + '</div>' +
+          '<div class="dv-section-head"><div class="dv-section-title">Ops Log (' + (r.opslogs || []).length + ')</div></div>' +
+          '<div class="opslogs-thread">' + opslogs + '</div>' +
         '</div>' +
 
       '</div>' +
-      '<div class="comment-bar">' +
-        '<textarea class="comment-input" id="c-input" placeholder="Add new ops log… (Enter to send)"></textarea>' +
+      '<div class="opslogs-bar">' +
+        '<textarea class="opslogs-input" id="c-input" placeholder="Add new ops log… (Enter to send)"></textarea>' +
         '<button class="btn btn-primary" id="c-send">Send</button>' +
       '</div>';
 
@@ -656,9 +656,9 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       actionRow.appendChild(b3);
     }
 
-    document.getElementById('c-send').addEventListener('click', function () { addComment(r.id); });
+    document.getElementById('c-send').addEventListener('click', function () { addopslogs(r.id); });
     document.getElementById('c-input').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addComment(r.id); }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addopslogs(r.id); }
     });
   }
 
@@ -670,11 +670,11 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     }).then(load);
   }
 
-  function addComment(id) {
+  function addopslogs(id) {
     var input = document.getElementById('c-input');
     var msg = input.value.trim();
     if (!msg) return;
-    fetch('/api/reports/' + id + '/comment', {
+    fetch('/api/reports/' + id + '/opslogs', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: msg, user: 'dashboard' })
     }).then(function () { input.value = ''; load(); });
@@ -774,7 +774,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
         '</div>' +
 
       '</div>' +
-      '<div class="comment-bar">' +
+      '<div class="opslogs-bar">' +
         '<button class="btn btn-ghost" id="nf-cancel">Cancel</button>' +
         '<button class="btn btn-primary" id="nf-submit">Create Incident</button>' +
       '</div>';
