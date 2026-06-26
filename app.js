@@ -32,7 +32,7 @@ function formatLocation(r) {
 }
 function incidentKeyboard(id) {
   return { inline_keyboard: [[
-    { text: '💬 Comment',     callback_data: `comment:${id}` },
+    { text: '💬 Ops Log',     callback_data: `comment:${id}` },
     { text: '🔧 In Progress', callback_data: `status:${id}:IN_PROGRESS` },
     { text: '✅ Resolve',     callback_data: `status:${id}:RESOLVED` }
   ]]};
@@ -65,7 +65,7 @@ bot.on('callback_query', async (query) => {
     if (!report) return bot.answerCallbackQuery(query.id, { text: '❌ Incident not found.' });
     pendingReply[userId] = { incidentId, originMsgId: msgId };
     const prompt = await bot.sendMessage(chatId,
-      `💬 @${user}, type your comment for incident \`${incidentId}\`.\n_(Just send your next message)_`,
+      `💬 @${user}, type your new ops logfor incident \`${incidentId}\`.\n_(Just send your next message)_`,
       { parse_mode: 'Markdown', reply_to_message_id: msgId });
     pendingReply[userId].promptMsgId = prompt.message_id;
     return bot.answerCallbackQuery(query.id, { text: 'Go ahead — type your comment!' });
@@ -103,7 +103,7 @@ bot.on('message', async (msg) => {
     if (!report) return bot.sendMessage(chatId, `❌ Incident \`${incidentId}\` not found.`, { parse_mode: 'Markdown' });
     report.comments.push({ id: Date.now(), user, message: text, time: now() });
     bot.deleteMessage(chatId, promptMsgId).catch(() => {});
-    bot.sendMessage(GROUP_CHAT_ID, `💬 *Comment on "${report.title || incidentId}"*\n\n@${user}: ${text}`,
+    bot.sendMessage(GROUP_CHAT_ID, `💬 *New update on "${report.title || incidentId}"*\n\n@${user}: ${text}`,
       { parse_mode: 'Markdown', reply_to_message_id: originMsgId, reply_markup: incidentKeyboard(incidentId) });
     return;
   }
@@ -622,13 +622,13 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 
         // Section 4: Comments
         '<div class="dv-section">' +
-          '<div class="dv-section-head"><div class="dv-section-title">Comments (' + (r.comments || []).length + ')</div></div>' +
+          '<div class="dv-section-head"><div class="dv-section-title">Ops Log (' + (r.comments || []).length + ')</div></div>' +
           '<div class="comment-thread">' + comments + '</div>' +
         '</div>' +
 
       '</div>' +
       '<div class="comment-bar">' +
-        '<textarea class="comment-input" id="c-input" placeholder="Add a comment… (Enter to send)"></textarea>' +
+        '<textarea class="comment-input" id="c-input" placeholder="Add new ops log… (Enter to send)"></textarea>' +
         '<button class="btn btn-primary" id="c-send">Send</button>' +
       '</div>';
 
