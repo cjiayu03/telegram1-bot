@@ -1,4 +1,5 @@
-const TelegramBot = require('node-telegram-bot-api');
+const TelegramBotLib = require('node-telegram-bot-api');
+const TelegramBot = TelegramBotLib.default ?? TelegramBotLib;
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -82,8 +83,9 @@ bot.on('callback_query', async (query) => {
         (query.message.text || '').replace(/Status:.+/g, '') + `\nStatus: ${statusEmoji(newStatus)} *${newStatus}*\nUpdated by @${user}`,
         { chat_id: chatId, message_id: msgId, parse_mode: 'Markdown', reply_markup: incidentKeyboard(incidentId) });
     } catch (_) {}
+    // FIX: was using undefined `status` variable — now correctly uses `newStatus`
     bot.answerCallbackQuery(query.id, { text: `${statusEmoji(newStatus)} Marked ${newStatus}` });
-    bot.sendMessage(GROUP_CHAT_ID, `${statusEmoji(status)} *Status Update*\n\nIncident \`${incidentId}\` → *${newStatus}* by @${user}`, { parse_mode: 'Markdown' });
+    bot.sendMessage(GROUP_CHAT_ID, `${statusEmoji(newStatus)} *Status Update*\n\nIncident \`${incidentId}\` → *${newStatus}* by @${user}`, { parse_mode: 'Markdown' });
     return;
   }
   bot.answerCallbackQuery(query.id);
@@ -277,7 +279,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 .header-right { display:flex; align-items:center; gap:14px; }
 .ts { font-family:'Roboto Mono',monospace; font-size:11px; color:var(--muted2); }
 
-
 .layout { display:flex; height:calc(100vh - 57px); }
 
 .left-panel { width:300px; min-width:240px; border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
@@ -333,7 +334,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 .btn-danger  { background:var(--sev-crit-bg); color:var(--sev-crit); border:1px solid #5a1010; }
 .btn-danger:hover { background:#2a0808; }
 
-/* Detail view - form field display style */
 .dv-scroll { flex:1; overflow-y:auto; padding:24px 28px; display:flex; flex-direction:column; gap:20px; }
 .dv-scroll::-webkit-scrollbar { width:3px; }
 .dv-scroll::-webkit-scrollbar-thumb { background:var(--border2); border-radius:2px; }
@@ -369,8 +369,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 .comment-input:focus { border-color:var(--accent); height:68px; }
 
 .empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:var(--muted2); }
-
-
 </style>
 </head>
 <body>
@@ -382,8 +380,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     <button class="btn btn-primary" id="new-btn">+ New Incident</button>
   </div>
 </div>
-
-
 
 <div class="layout">
   <div class="left-panel">
@@ -409,8 +405,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
   </div>
 </div>
 
-
-
 <script>
 (function () {
   var all = [], activeFilter = '', selectedId = null;
@@ -424,31 +418,23 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     return r.latDeg + String.fromCharCode(176) + (r.latMin || '00') + "'" + (r.latDir || 'N');
   }
 
-  // form-field display helpers
   function field(label, value, cls, req) {
     var lbl = '<div class="dv-label' + (req ? ' req' : '') + '">' + label + '</div>';
     var v = '<div class="dv-val' + (cls ? ' ' + cls : '') + '">' + esc(value || '—') + '</div>';
     return '<div class="dv-field">' + lbl + v + '</div>';
   }
-  function fieldHtml(label, innerHtml, cls, req) {
-    var lbl = '<div class="dv-label' + (req ? ' req' : '') + '">' + label + '</div>';
-    var v = '<div class="dv-val' + (cls ? ' ' + cls : '') + '">' + innerHtml + '</div>';
-    return '<div class="dv-field">' + lbl + v + '</div>';
-  }
   function row(cols, content) { return '<div class="dv-row col' + cols + '">' + content + '</div>'; }
 
-  // ── NEW INCIDENT BUTTON ──
   document.getElementById('new-btn').addEventListener('click', function () {
     selectedId = null;
     renderList();
     renderNewForm();
   });
 
-  // ── LOAD ──
   function load() {
     fetch('/api/reports').then(function (r) { return r.json(); }).then(function (data) {
       all = data;
-      document.getElementById('ts').textContent     = 'UPDATED ' + new Date().toLocaleTimeString();
+      document.getElementById('ts').textContent = 'UPDATED ' + new Date().toLocaleTimeString();
       renderList();
       if (selectedId) {
         var r = all.find(function (r) { return String(r.id) === String(selectedId); });
@@ -457,7 +443,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     }).catch(function (e) { console.error(e); });
   }
 
-  // ── FILTER CHIPS ──
   document.querySelectorAll('.chip').forEach(function (c) {
     c.addEventListener('click', function () {
       activeFilter = c.dataset.f;
@@ -467,10 +452,8 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     });
   });
 
-
   document.getElementById('search').addEventListener('input', renderList);
 
-  // ── RENDER LIST ──
   function renderList() {
     var q = (document.getElementById('search').value || '').toLowerCase();
     var list = all.filter(function (r) {
@@ -506,7 +489,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     }).join('');
   }
 
-  // Event delegation for incident list clicks
   document.getElementById('inc-list').addEventListener('click', function (e) {
     var card = e.target.closest('[data-id]');
     if (!card) return;
@@ -516,7 +498,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     if (r) renderDetail(r);
   });
 
-  // ── RENDER DETAIL ──
   function renderDetail(r) {
     var panel = document.getElementById('detail-panel');
 
@@ -573,15 +554,14 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       '</div>' +
       '<div class="dv-scroll">' +
 
-        // Section 1: Report Info
         '<div class="dv-section">' +
           row(2,
-            fieldHtml('Report Title (Auto Generated)', esc(r.title || r.report)) +
+            field('Report Title', r.title || r.report) +
             field('Report Type', r.incidentType || 'General')
           ) +
           row(2,
-            field('Report Date & Time', r.time, 'mono') +
-            field('Severity', r.severity)
+            field('Severity', r.severity) +
+            field('Priority', r.priority || 'normal')
           ) +
           row(2,
             field('Reported By', r.reportedBy || '—', '', true) +
@@ -597,11 +577,8 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           ) +
         '</div>' +
 
-        // Section 2: Location
         '<div class="dv-section">' +
-          '<div class="dv-section-head">' +
-            '<div class="dv-section-title">Location</div>' +
-          '</div>' +
+          '<div class="dv-section-head"><div class="dv-section-title">Location</div></div>' +
           '<div class="dv-label" style="margin-bottom:6px;">Latitude</div>' +
           row(3,
             field('Lat Deg', r.latDeg || '—', 'mono') +
@@ -611,7 +588,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           row(1, field('Location Code', locVal, '', true)) +
         '</div>' +
 
-        // Section 3: Short Report
         '<div class="dv-section">' +
           '<div class="dv-section-head"><div class="dv-section-title">Short Report</div></div>' +
           row(1, field('Summary', r.report, 'prose', true)) +
@@ -620,7 +596,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
         descHtml +
         attachHtml +
 
-        // Section 4: Comments
         '<div class="dv-section">' +
           '<div class="dv-section-head"><div class="dv-section-title">Comments (' + (r.comments || []).length + ')</div></div>' +
           '<div class="comment-thread">' + comments + '</div>' +
@@ -632,7 +607,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
         '<button class="btn btn-primary" id="c-send">Send</button>' +
       '</div>';
 
-    // Build action buttons with proper event listeners (no inline onclick)
     var actionRow = document.getElementById('action-row');
     if (r.status !== 'IN_PROGRESS') {
       var b1 = document.createElement('button');
@@ -662,7 +636,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     });
   }
 
-  // ── ACTIONS ──
   function setStatus(id, status) {
     fetch('/api/reports/' + id + '/status', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -722,7 +695,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       '</div>' +
       '<div class="dv-scroll">' +
 
-        // Section: Report Info
         '<div class="dv-section">' +
           '<div class="dv-row col2">' +
             '<div class="dv-field"><div class="dv-label req">Report Title</div><input class="dv-input" id="nf-title" placeholder="Short descriptive title"></div>' +
@@ -746,13 +718,12 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           '</div>' +
         '</div>' +
 
-        // Section: Location
         '<div class="dv-section">' +
           '<div class="dv-section-head"><div class="dv-section-title">Location</div></div>' +
           '<div class="dv-label" style="margin-bottom:6px;">Latitude</div>' +
           '<div class="dv-row col3">' +
             '<div class="dv-field"><div class="dv-label">Lat Deg</div><input class="dv-input mono" id="nf-latdeg" type="number" placeholder="°"></div>' +
-            '<div class="dv-field"><div class="dv-label">Lat Min</div><input class="dv-input mono" id="nf-latmin" type="number" placeholder="\"></div>' +
+            '<div class="dv-field"><div class="dv-label">Lat Min</div><input class="dv-input mono" id="nf-latmin" type="number" placeholder="\'"></div>' +
             '<div class="dv-field"><div class="dv-label">Lat Dir</div>' +
               '<select class="dv-input mono" id="nf-latdir"><option value="N">N</option><option value="S">S</option><option value="E">E</option><option value="W">W</option></select>' +
             '</div>' +
@@ -762,7 +733,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           '</div>' +
         '</div>' +
 
-        // Section: Report Content
         '<div class="dv-section">' +
           '<div class="dv-section-head"><div class="dv-section-title">Report Content</div></div>' +
           '<div class="dv-row col1">' +
