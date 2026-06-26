@@ -602,7 +602,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       '<div class="comment-bar">' +
         '<textarea class="comment-input" id="c-input" placeholder="Add new ops log… (Enter to send)"></textarea>' +
         '<button class="btn btn-primary" id="c-send">Send</button>' +
-      }</div>';
+      </div>';
 
     var actionRow = document.getElementById('action-row');
     if (r.status !== 'IN_PROGRESS') {
