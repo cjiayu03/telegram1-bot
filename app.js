@@ -19,10 +19,11 @@ if (!GROUP_CHAT_ID) throw new Error('Missing GROUP_CHAT_ID env var');
 const bot = new TelegramBot(token, { polling: true });
 let reports = [];
 
-const VALID_SEVERITIES = ['low', 'medium', 'critical'];
+const VALID_SEVERITIES = ['L1', 'L2', 'L3_SIG', 'L3_MIN', 'L4'];
+const SEVERITY_LABELS = { L1: 'L1', L2: 'L2', L3_SIG: 'L3 (Significant)', L3_MIN: 'L3 (Minor)', L4: 'L4' };
 const VALID_STATUSES   = ['OPEN', 'IN_PROGRESS', 'RESOLVED'];
 
-function severityEmoji(s) { return { low: '🟡', medium: '🟠', critical: '🔴' }[s] || '⚪'; }
+function severityEmoji(s) { return { L1: '🔴', L2: '🟠', L3_SIG: '🟡', L3_MIN: '🟡', L4: '⚪' }[s] || '⚪'; }
 function statusEmoji(s)   { return { OPEN: '🆕', IN_PROGRESS: '🔧', RESOLVED: '✅' }[s] || '❓'; }
 function now() { return new Date().toISOString().replace('T', ' ').slice(0, 19); }
 function formatLocation(r) {
@@ -141,7 +142,7 @@ bot.on('message', async (msg) => {
     const locationCode = get(/^Loc Code:\s*(.+)$/m, '');
     const reportedBy   = get(/^Reported By:\s*(.+)$/m, `@${user}`);
     const description  = get(/^Description:\s*([\s\S]*)$/m, 'Reported via Telegram.');
-    const severity     = VALID_SEVERITIES.includes(severityRaw) ? severityRaw : 'medium';
+    const severity     = VALID_SEVERITIES.includes(severityRaw.toUpperCase()) ? severityRaw.toUpperCase() : 'L4';
     let fileId = '', origName = '';
     if (msg.photo?.length) { fileId = msg.photo[msg.photo.length - 1].file_id; origName = 'telegram-image.jpg'; }
     else if (msg.document) { fileId = msg.document.file_id; origName = msg.document.file_name; }
@@ -182,10 +183,11 @@ bot.on('message', async (msg) => {
 
 // ── API ROUTES ────────────────────────────────────────────────────────────────
 app.post('/api/report', (req, res) => {
-  const { severity = 'low', message, user = 'dashboard', title = '', description = '',
+  const { severity = 'L4', message, user = 'dashboard', title = '', description = '',
     assignee = '', priority = 'normal', incidentType = 'General', sector = '',
     latDeg = '', latMin = '', latDir = 'N', locationCode = '',
-    nature = 'General Outage', reportedBy = 'Dashboard Operator' } = req.body;
+    nature = 'General Outage', reportedBy = 'Dashboard Operator',
+    incidentDateTime = '' } = req.body;
   if (!message) return res.status(400).json({ error: 'Message required' });
   if (!VALID_SEVERITIES.includes(severity)) return res.status(400).json({ error: `Severity must be: ${VALID_SEVERITIES.join(', ')}` });
   const report = {
@@ -194,22 +196,21 @@ app.post('/api/report', (req, res) => {
     priority, status: 'OPEN', source: 'dashboard',
     time: now(), updatedAt: now(), comments: [],
     incidentType, sector: sector || 'Unassigned',
-    latDeg, latMin, latDir, locationCode, nature, reportedBy, attachment: ''
+    latDeg, latMin, latDir, locationCode, nature, reportedBy, attachment: '',
+    incidentDateTime
   };
   reports.unshift(report);
   const locStr = formatLocation(report) !== 'N/A' ? `\n📍 *Location*: ${formatLocation(report)}${locationCode ? ` \`${locationCode}\`` : ''}` : (locationCode ? `\n📍 *Loc Code*: \`${locationCode}\`` : '');
   const assigneeStr = assignee ? `\n👤 *Assignee*: @${assignee}` : '';
   const descStr = description ? `\n\n📋 *Description*:\n${description}` : '';
+  const dtStr = incidentDateTime ? `\n🕐 *Incident Date/Time*: ${incidentDateTime}` : '';
   bot.sendMessage(GROUP_CHAT_ID,
     `🚨 *Dashboard Incident* [${incidentType.toUpperCase()}]\n\n` +
     `*Title*: ${report.title}\n` +
     `*ID*: \`${report.id}\`\n` +
-    `*Severity*: ${severityEmoji(severity)} ${severity.toUpperCase()}\n` +
-    `*Priority*: ${priority.toUpperCase()}\n` +
-    `*Nature*: ${nature}\n` +
-    `*Sector*: ${sector || 'Unassigned'}\n` +
-    `*Reporter*: ${reportedBy}\n` +
-    `*Status*: 🆕 OPEN` +
+    `*Severity*: ${severityEmoji(severity)} ${SEVERITY_LABELS[severity] || severity}\n` +
+    dtStr +
+    `\n*Status*: 🆕 OPEN` +
     locStr +
     assigneeStr +
     `\n\n💬 *Report*: ${message}` +
@@ -307,16 +308,20 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 .card:hover { background:var(--surface2); border-color:var(--border2); }
 .card.on { background:var(--surface2); border-color:var(--accent); }
 .sev-bar { position:absolute; left:5px; top:7px; bottom:7px; width:3px; border-radius:2px; }
-.sev-bar.low      { background:var(--sev-low); }
-.sev-bar.medium   { background:var(--sev-med); }
-.sev-bar.critical { background:var(--sev-crit); }
+.sev-bar.L1     { background:var(--sev-crit); }
+.sev-bar.L2     { background:var(--sev-med); }
+.sev-bar.L3_SIG { background:var(--sev-low); }
+.sev-bar.L3_MIN { background:var(--sev-low); }
+.sev-bar.L4     { background:var(--muted2); }
 .card-title { font-size:12px; font-weight:600; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .card-meta { display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
 
 .badge { display:inline-flex; align-items:center; padding:2px 6px; border-radius:4px; font-size:9px; font-weight:700; font-family:'Roboto Mono',monospace; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
-.b-low      { background:var(--sev-low-bg);  color:var(--sev-low); }
-.b-medium   { background:var(--sev-med-bg);  color:var(--sev-med); }
-.b-critical { background:var(--sev-crit-bg); color:var(--sev-crit); }
+.b-L1     { background:var(--sev-crit-bg); color:var(--sev-crit); }
+.b-L2     { background:var(--sev-med-bg);  color:var(--sev-med); }
+.b-L3_SIG { background:var(--sev-low-bg);  color:var(--sev-low); }
+.b-L3_MIN { background:var(--sev-low-bg);  color:var(--sev-low); }
+.b-L4     { background:var(--surface3); border:1px solid var(--border2); color:var(--muted2); }
 .b-OPEN        { background:var(--st-open-bg); color:var(--st-open); }
 .b-IN_PROGRESS { background:var(--st-prog-bg); color:var(--st-prog); }
 .b-RESOLVED    { background:var(--st-res-bg);  color:var(--st-res); }
@@ -398,9 +403,11 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
       <button class="chip" data-f="OPEN">Open</button>
       <button class="chip" data-f="IN_PROGRESS">In Progress</button>
       <button class="chip" data-f="RESOLVED">Resolved</button>
-      <button class="chip" data-f="critical">Critical</button>
-      <button class="chip" data-f="medium">Medium</button>
-      <button class="chip" data-f="low">Low</button>
+      <button class="chip" data-f="L1">L1</button>
+      <button class="chip" data-f="L2">L2</button>
+      <button class="chip" data-f="L3_SIG">L3 (Sig)</button>
+      <button class="chip" data-f="L3_MIN">L3 (Min)</button>
+      <button class="chip" data-f="L4">L4</button>
     </div>
     <div class="inc-list" id="inc-list"></div>
   </div>
@@ -463,10 +470,12 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 
   document.getElementById('search').addEventListener('input', renderList);
 
+  var SEV_LABELS_FRONT = { L1: 'L1', L2: 'L2', L3_SIG: 'L3 (Significant)', L3_MIN: 'L3 (Minor)', L4: 'L4' };
+
   function renderList() {
     var q = (document.getElementById('search').value || '').toLowerCase();
     var list = all.filter(function (r) {
-      if (activeFilter === 'critical' || activeFilter === 'medium' || activeFilter === 'low') {
+      if (['L1','L2','L3_SIG','L3_MIN','L4'].includes(activeFilter)) {
         if (r.severity !== activeFilter) return false;
       } else if (activeFilter) {
         if (r.status !== activeFilter) return false;
@@ -491,7 +500,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
         '<div class="sev-bar ' + esc(r.severity) + '"></div>' +
         '<div class="card-title">' + prefix + esc(r.title || r.report) + '</div>' +
         '<div class="card-meta">' +
-          '<span class="badge b-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+          '<span class="badge b-' + esc(r.severity) + '">' + esc(SEV_LABELS_FRONT[r.severity] || r.severity) + '</span>' +
           '<span class="badge b-' + esc(r.status) + '">' + r.status.replace('_', ' ') + '</span>' +
           '<span style="font-size:10px;color:var(--muted2);margin-left:auto;">' + t + '</span>' +
         '</div></div>';
@@ -555,7 +564,7 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           '<div class="detail-id">#' + r.id + '</div>' +
         '</div>' +
         '<div class="detail-badges">' +
-          '<span class="badge b-' + esc(r.severity) + '">' + esc(r.severity) + '</span>' +
+          '<span class="badge b-' + esc(r.severity) + '">' + esc(SEV_LABELS_FRONT[r.severity] || r.severity) + '</span>' +
           '<span class="badge b-' + esc(r.status) + '">' + r.status.replace('_',' ') + '</span>' +
           '<span class="badge b-src">' + esc(r.source) + '</span>' +
         '</div>' +
@@ -663,23 +672,28 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
   }
 
   function submitReport() {
-    var title = document.getElementById('nf-title').value.trim();
-    if (!title) { document.getElementById('nf-title').focus(); return; }
+    var incidentType = document.getElementById('nf-type').value;
+    var severity     = document.getElementById('nf-sev').value;
+    var incidentDate = document.getElementById('nf-date').value;
+    var incidentTime = document.getElementById('nf-time').value;
+    if (!incidentDate || !incidentTime) {
+      document.getElementById(incidentDate ? 'nf-time' : 'nf-date').focus();
+      return;
+    }
+    var incidentDateTime = incidentDate + ' ' + incidentTime;
+    var msg = document.getElementById('nf-msg').value.trim();
     var body = {
-      title: title,
-      incidentType: document.getElementById('nf-type').value.trim() || 'General',
-      nature:       document.getElementById('nf-nature').value.trim() || 'Unspecified',
-      severity:     document.getElementById('nf-sev').value,
-      priority:     document.getElementById('nf-pri').value,
-      sector:       document.getElementById('nf-sector').value.trim(),
+      title: incidentType + ' — ' + SEV_LABELS[severity],
+      incidentType: incidentType,
+      severity: severity,
+      incidentDateTime: incidentDateTime,
       latDeg:       document.getElementById('nf-latdeg').value.trim(),
       latMin:       document.getElementById('nf-latmin').value.trim(),
       latDir:       document.getElementById('nf-latdir').value,
       locationCode: document.getElementById('nf-loccode').value.trim(),
-      reportedBy:   document.getElementById('nf-reportedby').value.trim() || 'Dashboard Operator',
-      assignee:     document.getElementById('nf-assignee').value.trim(),
       description:  document.getElementById('nf-desc').value.trim(),
-      message:      document.getElementById('nf-msg').value.trim() || title,
+      message: msg || (incidentType + ' incident reported (' + SEV_LABELS[severity] + ')'),
+      reportedBy: 'Dashboard Operator',
       user: 'dashboard'
     };
     fetch('/api/report', {
@@ -692,8 +706,12 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
     });
   }
 
+  var SEV_LABELS = { L1: 'L1', L2: 'L2', L3_SIG: 'L3 (Significant)', L3_MIN: 'L3 (Minor)', L4: 'L4' };
+
   function renderNewForm() {
     var panel = document.getElementById('detail-panel');
+    var todayDate = new Date().toISOString().slice(0, 10);
+    var nowTime = new Date().toTimeString().slice(0, 5);
     panel.innerHTML =
       '<div class="detail-head">' +
         '<div class="detail-title-row">' +
@@ -706,24 +724,30 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
 
         '<div class="dv-section">' +
           '<div class="dv-row col2">' +
-            '<div class="dv-field"><div class="dv-label req">Report Title</div><input class="dv-input" id="nf-title" placeholder="Short descriptive title"></div>' +
-            '<div class="dv-field"><div class="dv-label">Report Type</div><input class="dv-input" id="nf-type" placeholder="Outage, Cyber, Leak…"></div>' +
-          '</div>' +
-          '<div class="dv-row col2">' +
-            '<div class="dv-field"><div class="dv-label req">Nature of Incident</div><input class="dv-input" id="nf-nature" placeholder="Fiber Cut, Power Drop…"></div>' +
-            '<div class="dv-field"><div class="dv-label">Severity</div>' +
-              '<select class="dv-input" id="nf-sev"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="critical">Critical</option></select>' +
+            '<div class="dv-field"><div class="dv-label req">Incident Type</div>' +
+              '<select class="dv-input" id="nf-type">' +
+                '<option value="Outage">Outage</option>' +
+                '<option value="Cyber">Cyber</option>' +
+                '<option value="Leak">Leak</option>' +
+                '<option value="Power">Power</option>' +
+                '<option value="Network">Network</option>' +
+                '<option value="Hardware">Hardware</option>' +
+                '<option value="Other">Other</option>' +
+              '</select>' +
+            '</div>' +
+            '<div class="dv-field"><div class="dv-label req">Severity</div>' +
+              '<select class="dv-input" id="nf-sev">' +
+                '<option value="L1">L1</option>' +
+                '<option value="L2">L2</option>' +
+                '<option value="L3_SIG">L3 (Significant)</option>' +
+                '<option value="L3_MIN">L3 (Minor)</option>' +
+                '<option value="L4" selected>L4</option>' +
+              '</select>' +
             '</div>' +
           '</div>' +
           '<div class="dv-row col2">' +
-            '<div class="dv-field"><div class="dv-label">Sector</div><input class="dv-input" id="nf-sector" placeholder="Sector 4, Alpha, North-Zone"></div>' +
-            '<div class="dv-field"><div class="dv-label">Priority</div>' +
-              '<select class="dv-input" id="nf-pri"><option value="low">Low</option><option value="normal" selected>Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select>' +
-            '</div>' +
-          '</div>' +
-          '<div class="dv-row col2">' +
-            '<div class="dv-field"><div class="dv-label req">Reported By</div><input class="dv-input" id="nf-reportedby" placeholder="Name / Unit"></div>' +
-            '<div class="dv-field"><div class="dv-label">Assignee</div><input class="dv-input" id="nf-assignee" placeholder="@username"></div>' +
+            '<div class="dv-field"><div class="dv-label req">Date of Incident</div><input class="dv-input" id="nf-date" type="date" value="' + todayDate + '"></div>' +
+            '<div class="dv-field"><div class="dv-label req">Time of Incident</div><input class="dv-input" id="nf-time" type="time" value="' + nowTime + '"></div>' +
           '</div>' +
         '</div>' +
 
@@ -738,14 +762,14 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
             '</div>' +
           '</div>' +
           '<div class="dv-row col1">' +
-            '<div class="dv-field"><div class="dv-label req">Location Code</div><input class="dv-input" id="nf-loccode" placeholder="e.g. ACGP"></div>' +
+            '<div class="dv-field"><div class="dv-label">Location Code</div><input class="dv-input" id="nf-loccode" placeholder="e.g. ACGP"></div>' +
           '</div>' +
         '</div>' +
 
         '<div class="dv-section">' +
           '<div class="dv-section-head"><div class="dv-section-title">Report Content</div></div>' +
           '<div class="dv-row col1">' +
-            '<div class="dv-field"><div class="dv-label req">Short Report (sent to Telegram)</div><input class="dv-input" id="nf-msg" placeholder="One-line summary"></div>' +
+            '<div class="dv-field"><div class="dv-label">Short Report (sent to Telegram)</div><input class="dv-input" id="nf-msg" placeholder="One-line summary"></div>' +
           '</div>' +
           '<div class="dv-row col1">' +
             '<div class="dv-field"><div class="dv-label">Description</div><textarea class="dv-input" id="nf-desc" style="min-height:80px;resize:vertical;" placeholder="What happened? Impact, context…"></textarea></div>' +
@@ -769,7 +793,6 @@ body { background:var(--bg); font-family:'Inter','Segoe UI',sans-serif; color:va
           '<div style="font-size:12px;margin-top:2px;">or create one with + New Incident</div>' +
         '</div>';
     });
-    document.getElementById('nf-title').focus();
   }
 
   load();
